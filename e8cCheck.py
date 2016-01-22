@@ -7,6 +7,7 @@ from multiprocess import Pool, Manager
 from py2neo import Graph, Node, authenticate
 from device.olt import Zte
 from funcy import lmap, merge, partial, walk, lmapcat
+from funcy import re_test
 
 config = configparser.ConfigParser()
 config.read('config.ini')
@@ -33,7 +34,7 @@ olts = [x[0] for x in nodes]
 
 
 def saveOnus_f(ip):
-    mark, rslt = Zte.getOnus(ip)[:-1]
+    mark, rslt = Zte.get_onus(ip)[:-1]
     if mark == 'success' and rslt:
         _ff = lambda x: walk(partial(merge, (ip, x[0])), x[1])
         rslt1 = lmapcat(_ff, rslt)
@@ -52,6 +53,22 @@ def in_to_DB():
     records = [x.strip().split(',') for x in open(result_file)]
     cmd = "insert into onu values(?,?,?,?)"
     cursor.executemany(cmd, records)
+
+def del_onu():
+    records = (x.strip().split(',') for x in open('e8c_diff.csv'))
+    for ip, port, onuid, loid in records:
+        child = Zte.telnet(ip)
+        rslt = Zte.do_some(child, 'show run {port}'.format(port=port))
+        if re_test(r'onu\s{0}\stype\sE8C[PG]24\sloid\s{1}'.format(onuid, loid),
+                   rslt):
+            child.sendline('conf t')
+            child.expect('#')
+            child.sendline(port)
+            child.expect('#')
+            child.sendline('no onu {onuid}'.format(onuid=onuid))
+            child.expect('#')
+        Zte.close(child)
+
 
 
 def main():

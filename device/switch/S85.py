@@ -4,9 +4,8 @@ import configparser
 import pexpect
 import sys
 import re
-from funcy import lfilter, re_find, lmap
-from funcy import re_find, re_all, update_in
-
+from funcy import filter, re_find, map
+from funcy import select_values, re_all, update_in
 
 pager = "---- More ----"
 prompter = "]"
@@ -20,8 +19,7 @@ super_password = config.get('switch', 'super_passwd')
 
 
 def telnet(ip):
-    child = pexpect.spawn(
-        'telnet {0}'.format(ip), encoding='ISO-8859-1')
+    child = pexpect.spawn('telnet {0}'.format(ip), encoding='ISO-8859-1')
     child.logfile = logfile
 
     child.expect('Username:')
@@ -38,9 +36,16 @@ def telnet(ip):
     return child
 
 
-def doSome(child, command):
+def close(child):
+    child.sendcontrol('z')
+    child.expect('>')
+    child.sendline('quit')
+    child.close()
+
+
+def do_some(child, cmd):
     rslt = []
-    child.sendline(command)
+    child.sendline(cmd)
     while True:
         index = child.expect([prompter, pager], timeout=120)
         rslt.append(child.before)
@@ -49,13 +54,13 @@ def doSome(child, command):
         else:
             child.send(' ')
             continue
-    rslt1 = ''.join(rslt).replace(
-        '\x1b[42D', '').replace(command + '\r\n', '', 1)
+    rslt1 = ''.join(rslt).replace('\x1b[42D', '')\
+                         .replace(cmd + '\r\n', '',1)
     return rslt1
 
 
-def getInfs(ip):
-    def __inf(record):
+def get_infs(ip):
+    def _inf(record):
         name = re_find(r'interface\s+(X?Gigabit\S+)', record)
         desc = re_find(r'description\s+(\S+)', record)
         group = re_find(r'link-aggregation\s+(group\s+\d+)', record)
@@ -63,37 +68,31 @@ def getInfs(ip):
 
     try:
         child = telnet(ip)
-        rslt = doSome(child, 'disp cu interface')
-        child.sendline('quit')
-        child.expect('>')
-        child.sendline('quit')
-        child.close()
-
-        rslt1 = lfilter(r'X?GigabitEthernet', rslt.split('#'))
-        rslt2 = lmap(__inf, rslt1)
+        rslt = do_some(child, 'disp cu interface')
+        close(child)
     except (pexpect.EOF, pexpect.TIMEOUT) as e:
         return ('fail', None, ip)
+    rslt1 = filter(r'X?GigabitEthernet', rslt.split('#'))
+    rslt2 = map(_inf, rslt1)
     return ('success', rslt2, ip)
 
 
-def getGroups(ip):
+def get_groups(ip):
     try:
         child = telnet(ip)
-        rslt = doSome(child, 'disp cu config | in link-aggregation')
-        child.sendline('quit')
-        child.expect('>')
-        child.sendline('quit')
-        child.close()
-
-        temp = re_all(r'(group\s+\d+)\s+mode\s+(\w+)', rslt)
-        temp1 = dict(
-            re_all(r'(group\s+\d+)\s+description\s+(\S+)', rslt))
-        rslt2 = [dict(isLogical='yes', name=x[0], mode=x[1], desc=temp1.get(x[0], None))
-                 for x in temp]
-        rslt3 = [update_in(x, ['mode'], lambda y: 'lacp' if y == 'static' else y)
-                 for x in rslt2]
+        rslt = do_some(child, 'disp cu config | in link-aggregation')
+        close(child)
     except (pexpect.EOF, pexpect.TIMEOUT) as e:
         return ('fail', None, ip)
+    temp = re_all(r'(group\s+\d+)\s+mode\s+(\w+)', rslt)
+    temp1 = dict(re_all(r'(group\s+\d+)\s+description\s+(\S+)', rslt))
+    rslt1 = [dict(name=x[0],
+                  mode=x[1],
+                  desc=temp1.get(x[0], None)) for x in temp]
+    rslt3 = [
+        update_in(x, ['mode'], lambda y: 'lacp' if y == 'static' else y)
+        for x in rslt1
+    ]
     return ('success', rslt3, ip)
 
 
