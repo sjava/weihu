@@ -4,7 +4,7 @@ import configparser
 import pexpect
 import sys
 import re
-from funcy import filter, re_find, map
+from funcy import filter, re_find, map, lmap, partial
 from funcy import select_values, re_all, update_in
 
 pager = "---- More ----"
@@ -55,7 +55,7 @@ def do_some(child, cmd):
             child.send(' ')
             continue
     rslt1 = ''.join(rslt).replace('\x1b[42D', '')\
-                         .replace(cmd + '\r\n', '',1)
+                         .replace(cmd + '\r\n', '', 1)
     return rslt1
 
 
@@ -89,11 +89,29 @@ def get_groups(ip):
     rslt1 = [dict(name=x[0],
                   mode=x[1],
                   desc=temp1.get(x[0], None)) for x in temp]
-    rslt3 = [
-        update_in(x, ['mode'], lambda y: 'lacp' if y == 'static' else y)
-        for x in rslt1
-    ]
+    rslt3 = [update_in(x, ['mode'], lambda y: 'lacp' if y == 'static' else y)
+             for x in rslt1]
     return ('success', rslt3, ip)
+
+
+def get_traffics(ip, infs):
+    def _get_traffic(child, inf):
+        rslt = do_some(child, 'disp int {inf}'.format(inf=inf))
+        state = re_find(r'{inf}\scurrent\sstate\s:\s?(\w+\s?\w+)'
+                        .format(inf=inf), rslt).lower()
+        bw = int(re_find(r'(\d+)Mbps-speed mode', rslt) or 0)
+        inTraffic = int(re_find(r'\d+ seconds input:\s+\d+\spackets/sec\s(\d+)\sbits/sec', rslt)) / 1000000
+        outTraffic = int(re_find(r'\d+ seconds output:\s+\d+\spackets/sec\s(\d+)\sbits/sec', rslt)) / 1000000
+        infDict = dict(name=inf, state=state, bw=bw, inTraffic=inTraffic, outTraffic=outTraffic)
+        return infDict
+
+    try:
+        child = telnet(ip)
+        rslt = lmap(partial(_get_traffic, child), infs)
+        close(child)
+    except (pexpect.EOF, pexpect.TIMEOUT) as e:
+        return ('fail', None, ip)
+    return ('success', rslt, ip)
 
 
 def main():

@@ -35,14 +35,13 @@ def import_bras(file):
 def _model(funcs, device):
     no_model = lambda x: ('fail', None, x)
     ip, model = device
-    if '-' in model:
-        model = model.replace('-', '_')
     return funcs.get(model, no_model)(ip)
 
 
 def bingfa_check():
-    funcs = dict(ME60=ME60.get_bingfa, ME60_X16=ME60.get_bingfa,
-                 M6000=M6k.get_bingfa)
+    funcs = {'ME60': ME60.get_bingfa,
+             'ME60-X16': ME60.get_bingfa,
+             'M6000': M6k.get_bingfa}
     _get_bf = partial(_model, funcs)
 
     clear()
@@ -53,8 +52,8 @@ def bingfa_check():
         for mark, record, ip in rslt:
             flog.write('{ip}:{mark}\n'.format(ip=ip, mark=mark))
             for slot, user, date in record:
-                frslt.write('{ip},{slot},{user},{date}\n'.format(
-                    ip=ip, slot=slot, user=user, date=date))
+                frslt.write('{ip},{slot},{user},{date}\n'\
+                        .format(ip=ip, slot=slot, user=user, date=date))
 
 
 def main():

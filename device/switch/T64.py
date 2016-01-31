@@ -1,18 +1,24 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+import configparser
 import pexpect
 import sys
 import re
-from toolz import partition, partitionby
-from itertools import product
-from functools import reduce
+from funcy import distinct, re_find, rcompose, partial, map, lmap
+from funcy import re_all
 
 pager = "--More--"
 prompter = "#"
 logfile = sys.stdout
 
+config = configparser.ConfigParser()
+config.read('config.ini')
+username = config.get('switch', 'username')
+password = config.get('switch', 'passwd')
+super_password = config.get('switch', 'super_passwd')
 
-def telnet(ip, username, password, super_password):
+
+def telnet(ip):
     child = pexpect.spawn(
         'telnet {0}'.format(ip), encoding='ISO-8859-1')
     child.logfile = logfile
@@ -30,119 +36,94 @@ def telnet(ip, username, password, super_password):
     return child
 
 
-def doSome(child, command):
+def do_some(child, command):
     result = []
     child.sendline(command)
     while True:
         index = child.expect([prompter, pager], timeout=120)
+        result.append(child.before)
         if index == 0:
-            result.append(child.before)
             break
         else:
-            result.append(child.before)
             child.send(' ')
             continue
     rslt = ''.join(result).replace('\x08', '')
     return rslt.replace(command + '\r\n', '', 1)
 
 
-def card_check(ip='', username='', password='', super_password=''):
+def close(child):
+    child.sendcontrol('z')
+    child.expect(prompter)
+    child.sendline('exit')
+    child.close()
+
+
+def get_groups(ip):
+    def _get_desc(child, group):
+        name = group['name']
+        rslt = do_some(child, 'show run interface {name}'.format(name=name))
+        desc = re_find(r'description\s(\S+)', rslt)
+        group['desc'] = desc
+        return group
+
     try:
-        result = []
-        power = []
-        child = telnet(ip, username, password, super_password)
-        child.sendline('show power')
-        child.expect('#')
-        power.append(child.before)
-        child.sendline('show version')
-        while True:
-            index = child.expect(['#', pager])
-            if index == 0:
-                result.append(child.before)
-                child.sendline('exit')
-                child.close()
-                break
-            else:
-                result.append(child.before)
-                child.send(' ')
-                continue
+        child = telnet(ip)
+        rslt = do_some(child, 'show run | in smartgroup [0-9]+')
+        ff = rcompose(partial(map, lambda x: x.strip()),
+                      distinct,
+                      partial(map, r'(smartgroup\s\d+)\smode\s(\w+)'),
+                      partial(map, lambda x: dict(name=x[0].replace(' ', ''), mode=x[1])))
+        temp = ff(rslt.splitlines()[:-1])
+        get_desc = partial(_get_desc, child)
+        groups = lmap(get_desc, temp)
+        close(child)
     except (pexpect.EOF, pexpect.TIMEOUT) as e:
-        return ['fail', None]
-    rslt = ''.join(result).split('\r\n')[1:-1]
-    info = [x.replace('\x08', '').strip()
-            for x in rslt if 'Board Name' in x or '[' in x]
-    slot = [re.findall(r'panel (\d+)', x)[0] for x in info if '[' in x]
-    card = [x.split(':')[1].strip() for x in info if 'Board Name' in x]
-
-    rslt1 = ''.join(power).split('\r\n')[1:-1]
-    power1 = [(re.findall(r'\d+', x)[0], 'Power')
-              for x in rslt1 if 'Work' in x and 'Power' in x]
-    return ['success'] + [power1 + list(zip(slot, card))]
-
-
-def get_interface(ip='', username='', password='', super_password=''):
-    def port(rec):
-        temp = re.findall(r'^([xgs]\S+) is (.*),', rec)
-        if temp:
-            name, state = temp[0]
-            description = re.findall(r'Description is (.+)\r\n', rec)[0]
-            bw = re.findall(r'BW\s+(\d+)\s+Kbits', rec)
-            if bw:
-                bw = int(bw[0]) / 1000
-            else:
-                bw = 0
-            if name.startswith('smartgroup'):
-                logical = 'yes'
-            else:
-                logical = 'no'
-            traffic = re.findall(
-                r'utilization:\s+input\s+(\d+)%,\s+output\s+(\d+)%', rec)
-            if traffic:
-                in_traffic, out_traffic = traffic[0]
-                in_traffic = round(float(in_traffic) / 100, 2)
-                out_traffic = round(float(out_traffic) / 100, 2)
-            else:
-                in_traffic = 0
-                out_traffic = 0
-            return dict(name=name, state=state, description=description,
-                        logical=logical, bw=bw, in_traffic=in_traffic, out_traffic=out_traffic)
-        else:
-            return dict()
-    try:
-        child = telnet(ip, username, password, super_password)
-        rslt = doSome(child, 'show interface')
-        rec1 = re.split(r'\r\r\n +\r\r\n *', rslt)
-        rec2 = [port(x) for x in rec1]
-        ports = [x for x in rec2 if x]
-
-        def linkagg(port):
-            if port['name'].startswith('smartgroup'):
-                id = port['name'].replace('smartgroup', '')
-                rslt = doSome(
-                    child, 'show lacp {id} internal'.format(id=id))
-                rslt1 = rslt.split('\r\n')
-                pt = [x.split()[0] for x in rslt1 if 'selected' in x]
-                port['linkaggs'] = pt
-                temp = [x for x in ports if x['name'] in pt]
-                in_sum = lambda x, y: x + y['in_traffic'] * y['bw']
-                out_sum = lambda x, y: x + y['out_traffic'] * y['bw']
-                if port['bw']:
-                    in_traffic = reduce(in_sum, temp, 0) / port['bw']
-                    out_traffic = reduce(out_sum, temp, 0) / port['bw']
-                else:
-                    in_traffic = 0
-                    out_traffic = 0
-                port['in_traffic'] = round(in_traffic, 2)
-                port['out_traffic'] = round(out_traffic, 2)
-            return port
-
-        ports1 = [linkagg(x) for x in ports]
-
-        child.sendline('exit')
-        child.close()
-    except Exception as e:
         return ('fail', None, ip)
-    return ('success', ports1, ip)
+    return ('success', groups, ip)
+
+
+def get_infs(ip):
+    def _get_desc(child, inf):
+        name = inf['name']
+        rslt = do_some(child, 'show run interface {name}'.format(name=name))
+        desc = re_find(r'description\s(\S+)', rslt)
+        group = re_find(r'(smartgroup\s\d+)', rslt)
+        if group is not None:
+            group = group.replace(' ', '')
+        inf['desc'] = desc
+        inf['group'] = group
+        return inf
+
+    try:
+        child = telnet(ip)
+        rslt = do_some(child, 'show run | in interface (xg|g)ei_')
+        temp = [dict(name=x) for x in re_all('interface\s(\S+)', rslt)]
+        get_desc = partial(_get_desc, child)
+        infs = lmap(get_desc, temp)
+        close(child)
+    except (pexpect.EOF, pexpect.TIMEOUT) as e:
+        return ('fail', None, ip)
+    return ('success', infs, ip)
+
+
+def get_traffics(ip, infs):
+    def _get_traffic(child, inf):
+        rslt = do_some(child, 'show interface {inf}'.format(inf=inf))
+        state = re_find(r'{inf}\sis\s(\w+\s?\w+)'.format(inf=inf),
+                        rslt).lower()
+        bw = int(re_find(r'BW\s(\d+)\sKbits', rslt)) / 1000
+        inTraffic = int(re_find(r'120 seconds input.*:\s+(\d+)\sBps', rslt)) * 8 / 1000000
+        outTraffic = int(re_find(r'120 seconds output.*:\s+(\d+)\sBps', rslt)) * 8 / 1000000
+        infDict = dict(name=inf, state=state, bw=bw, inTraffic=inTraffic, outTraffic=outTraffic)
+        return infDict
+
+    try:
+        child = telnet(ip)
+        rslt = lmap(partial(_get_traffic, child), infs)
+        close(child)
+    except (pexpect.EOF, pexpect.TIMEOUT) as e:
+        return ('fail', None, ip)
+    return ('success', rslt, ip)
 
 
 def main():
