@@ -99,7 +99,13 @@ def get_traffics(ip, infs):
         rslt = do_some(child, 'disp int {inf}'.format(inf=inf))
         state = re_find(r'{inf}\scurrent\sstate\s:\s?(\w+\s?\w+)'
                         .format(inf=inf), rslt).lower()
-        bw = int(re_find(r'(\d+)Mbps-speed mode', rslt) or 0)
+        bw = re_find(r'(\d+[MG])bps-speed mode', rslt)
+        if bw is None:
+            bw = 0
+        elif 'M' in bw:
+            bw = int(bw.replace('M', ''))
+        else:
+            bw = int(bw.replace('G', '')) * 1000
         inTraffic = int(re_find(r'\d+ seconds input:\s+\d+\spackets/sec\s(\d+)\sbits/sec', rslt)) / 1000000
         outTraffic = int(re_find(r'\d+ seconds output:\s+\d+\spackets/sec\s(\d+)\sbits/sec', rslt)) / 1000000
         infDict = dict(name=inf, state=state, bw=bw, inTraffic=inTraffic, outTraffic=outTraffic)

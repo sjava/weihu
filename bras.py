@@ -4,7 +4,7 @@ import os
 import configparser
 from device.bras import ME60, M6k
 from py2neo import authenticate, Graph, Node
-from funcy import lmap, partial
+from funcy import lmap, partial, compose
 
 basFile = 'bras.txt'
 logFile = 'result/bas_log.txt'
@@ -52,13 +52,41 @@ def bingfa_check():
         for mark, record, ip in rslt:
             flog.write('{ip}:{mark}\n'.format(ip=ip, mark=mark))
             for slot, user, date in record:
-                frslt.write('{ip},{slot},{user},{date}\n'\
-                        .format(ip=ip, slot=slot, user=user, date=date))
+                frslt.write('{ip},{slot},{user},{date}\n'
+                            .format(ip=ip, slot=slot, user=user, date=date))
+
+
+def _add_bingfa(rslt):
+    cmd = """
+    merge (b:Bras {ip:{ip}})-[:HAS]->(c:Card {slot:{slot}})
+    on match set c.peakUsers={peakUsers},c.peakTime={peakTime},c.updated=timestamp()
+    on create set c.peakUsers={peakUsers},c.peakTime={peakTime},c.updated=timestamp()
+    """
+    mark, record, ip = rslt
+    with open(logFile, 'a') as flog:
+        flog.write('{ip}:{mark}\n'.format(ip=ip, mark=mark))
+    if mark == 'success':
+        tx = graph.cypher.begin()
+        lmap(lambda x: tx.append(cmd, ip=ip, slot=x[0], peakUsers=x[1], peakTime=x[2]), record)
+        tx.process()
+        tx.commit()
+
+
+def add_bingfa():
+    funcs = {'ME60': ME60.get_bingfa,
+             'ME60-X16': ME60.get_bingfa,
+             'M6000': M6k.get_bingfa}
+    _get_bf = partial(_model, funcs)
+
+    clear()
+    nodes = graph.find('Bras')
+    bras = [(x['ip'], x['model']) for x in nodes]
+    lmap(compose(_add_bingfa, _get_bf), bras)
 
 
 def main():
-    #  pass
-    bingfa_check()
+    pass
+    #  bingfa_check()
 
 
 if __name__ == '__main__':

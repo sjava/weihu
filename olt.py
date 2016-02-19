@@ -395,8 +395,8 @@ def zte_conf():
 def main():
     #  zhongji_check()
     #  hw_gpon()
-    #  pass
-    traffic_check()
+    pass
+    #  traffic_check()
     #  hw_conf()
 
 if __name__ == '__main__':

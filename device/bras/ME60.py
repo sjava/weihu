@@ -1,0 +1,75 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+import pexpect
+import configparser
+import sys
+from funcy import re_find, select, map, compose, partial
+from funcy import lmap
+
+prompter = "]"
+pager = "---- More ----"
+logfile = sys.stdout
+
+conf = configparser.ConfigParser()
+conf.read('config.ini')
+username = conf.get('bras', 'username')
+password = conf.get('bras', 'password')
+
+
+def telnet(ip):
+    child = pexpect.spawn('telnet {ip}'.format(ip=ip),
+                          encoding='ISO-8859-1')
+    child.logfile = logfile
+    child.expect('Username:')
+    child.sendline(username)
+    child.expect('Password:')
+    child.sendline(password)
+    child.expect('>')
+    child.sendline('sys')
+    child.expect(prompter)
+    return child
+
+
+def close(child):
+    child.sendcontrol('z')
+    child.expect('>')
+    child.sendline('q')
+    child.close()
+
+
+def do_some(child, cmd):
+    child.sendline(cmd)
+    rslt = []
+    while True:
+        index = child.expect([prompter, pager], timeout=120)
+        rslt.append(child.before)
+        if index == 0:
+            break
+        else:
+            child.send(' ')
+            continue
+    return ''.join(rslt).replace('\x1b[42D', '').replace(cmd + '\r\n', '', 1)
+
+
+def get_bingfa(ip):
+    def _get_users(child, slot):
+        record = do_some(
+            child, 'disp max-online slot {s}'.format(s=slot))
+        users = re_find(
+            r'Max online users since startup\s+:\s+(\d+)', record)
+        users = int(users or 0)
+        date = re_find(
+            r'Time of max online users\s+:\s+(\d{4}-\d{2}-\d{2})', record)
+        return (slot, users, date)
+
+    try:
+        child = telnet(ip)
+        rslt = do_some(child, 'disp dev | in BSU')
+        ff = compose(partial(select, bool),
+                     partial(map, r'(\d+)\s+BSU'))
+        slots = ff(rslt.split('\r\n'))
+        maxUsers = lmap(partial(_get_users, child), slots)
+        close(child)
+    except (pexpect.EOF, pexpect.TIMEOUT) as e:
+        return ('fail', None, ip)
+    return ('success', maxUsers, ip)

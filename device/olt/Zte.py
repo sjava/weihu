@@ -4,8 +4,9 @@ import pexpect
 import sys
 import configparser
 import re
-from funcy import re_all, partial, lmap
-from funcy import filter
+from funcy import re_all, partial, lmap, re_find
+from funcy import select, distinct, filter
+from toolz import thread_last
 
 prompter = "#"
 pager = "--More--"
@@ -29,11 +30,11 @@ def telnet(ip):
     return child
 
 
-def do_some(child, cmd):
+def do_some(child, cmd, timeout=120):
     result = []
     child.sendline(cmd)
     while True:
-        index = child.expect([prompter, pager], timeout=120)
+        index = child.expect([prompter, pager], timeout=timeout)
         result.append(child.before)
         if index == 0:
             break
@@ -43,11 +44,13 @@ def do_some(child, cmd):
     rslt = ''.join(result).replace('\x08', '').replace(cmd + '\r\n', '', 1)
     return rslt
 
+
 def close(child):
     child.sendcontrol('z')
     child.expect(prompter)
     child.sendline('exit')
     child.close()
+
 
 def get_pon_ports(ip):
     try:
@@ -81,3 +84,76 @@ def get_onus(ip):
         return ('fail', None, ip)
     rslt1 = filter(lambda x: bool(x[1]), rslt)
     return ('success', rslt1, ip)
+
+
+def get_groups(ip):
+    def _get_infs(record):
+        name = re_find(r'(Smartgroup:\d+)', record)
+        if name:
+            name = name.lower().replace(':', '')
+        infs = re_all(r'(x?gei_\d+/\d+/\d+)\s?selected', record)
+        return dict(name=name, infs=infs)
+
+    def _get_desc_mode(child, group):
+        rslt = do_some(child, 'show run int {name}'.format(name=group['name']))
+        desc = re_find(r'description\s+(\S+)', rslt)
+        group['desc'] = desc
+        rslt = do_some(child, 'show run int {inf}'.format(inf=group['infs'][0]))
+        mode = re_find(r'smartgroup\s\d+\smode\s(\S+)', rslt)
+        group['mode'] = mode
+        return group
+
+    try:
+        child = telnet(ip)
+        rslt = do_some(child, 'show lacp internal').split('\r\n\r\n')
+        groups = thread_last(rslt,
+                             (lmap, _get_infs),
+                             (select, lambda x: x['name'] and x['infs']))
+        lmap(partial(_get_desc_mode, child), groups)
+        close(child)
+    except (pexpect.EOF, pexpect.TIMEOUT) as e:
+        return ('fail', None, ip)
+    return ('success', groups, ip)
+
+
+def get_infs(ip):
+    def _get_info(child, inf):
+        rslt = do_some(child, 'show int {inf}'.format(inf=inf))
+        desc = re_find(r'Description\sis\s(\S+)', rslt)
+        state = re_find(r'{inf}\sis\s(\S+\s?\S+),'.format(inf=inf), rslt)
+        bw = re_find(r'BW\s(\d+)\sKbits', rslt)
+        bw = int(bw or 0) / 1000
+        inTraffic = re_find(r'seconds\sinput\srate\s?:\s+(\d+)\sBps', rslt)
+        inTraffic = int(inTraffic or 0) * 8 / 1e6
+        outTraffic = re_find(r'seconds\soutput\srate:\s+(\d+)\sBps', rslt)
+        outTraffic = int(outTraffic or 0) * 8 / 1e6
+        return dict(name=inf, desc=desc, state=state, bw=bw,
+                    inTraffic=inTraffic, outTraffic=outTraffic)
+
+    try:
+        child = telnet(ip)
+        rslt = do_some(child, 'show run | in interface')
+        rslt = re_all(r'interface\s+(x?gei_\d+/\d+/\d+)', rslt)
+        infs = lmap(partial(_get_info, child), rslt)
+        close(child)
+    except (pexpect.EOF, pexpect.TIMEOUT) as e:
+        return ('fail', None, ip)
+    return ('success', infs, ip)
+
+
+def get_traffics(ip, infs):
+    def _get_traffic(child, inf):
+        rslt = do_some(child, 'show int {inf}'.format(inf=inf))
+        state = re_find(r'{inf}\s+is\s+(\w+)'.format(inf=inf), rslt).lower()
+        bw = int(re_find(r'BW\s+(\d+)\s+Kbits', rslt))
+        inTraffic = int(re_find(r'seconds\sinput\srate\s?:\s+(\d+)\s+Bps', rslt)) * 8 / 10e6
+        outTraffic = int(re_find(r'seconds\soutput\srate\s?:\s+(\d+)\s+Bps', rslt)) * 8 / 10e6
+        return dict(name=inf, state=state, bw=bw, inTraffic=inTraffic, outTraffic=outTraffic)
+
+    try:
+        child = telnet(ip)
+        rslt = lmap(partial(_get_traffic, child), infs)
+        close(child)
+    except (pexpect.EOF, pexpect.TIMEOUT) as e:
+        return ('fail', None, ip)
+    return ('success', rslt, ip)

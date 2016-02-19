@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 import os
 import re
+import time
 import pexpect
 import configparser
 from multiprocess import Pool, Manager
@@ -17,7 +18,7 @@ neo4j_password = config.get('neo4j', 'password')
 authenticate('61.155.48.36:7474', neo4j_username, neo4j_password)
 graph = Graph("http://61.155.48.36:7474/db/data")
 
-processor = 64
+processor = 128
 sw_file, log_file, result_file = ('sw.txt', 'result/sw_log.txt',
                                   'result/sw_info.txt')
 
@@ -69,7 +70,10 @@ def _add_groups(lock, record):
     statement = """match (s:Switch {ip:{ip}})
     merge (s)-[r:HAS]->(g:Group {name:{name}})
     on create set g.mode={mode},g.desc={desc},g.updated=timestamp()
-    on match set g.mode={mode},g.desc={desc},g.updated=timestamp()"""
+    on match set g.mode={mode},g.desc={desc},g.updated=timestamp()
+    with s,g
+    match (s)-->(g)-[r:OWNED]->(i:Inf)
+    delete r"""
 
     with lock:
         if mark == 'success':
@@ -150,7 +154,7 @@ def _add_traffics(lock, record):
     mark, rslt, ip = record
     cmd = """
     match (s:Switch {ip:{ip}})-->(i:Inf{name:{name}})
-    set i.state={state},i.bw={bw},i.inTraffic={inTraffic},i.outTraffic={outTraffic}
+    set i.state={state},i.bw={bw},i.inTraffic={inTraffic},i.outTraffic={outTraffic},i.updated=timestamp()
     """
     with lock:
         if mark == 'success':
@@ -175,7 +179,7 @@ def add_traffics():
     nodes = graph.cypher.execute(
         "match (s:Switch)--(i:Inf)  return s.ip as ip,collect(i.name) as infs,s.model as model")
     switchs = [dict(ip=x['ip'], infs=x['infs'], model=x['model']) for x in nodes]
-    pool = Pool(64)
+    pool = Pool(processor)
     lock = Manager().Lock()
     _ff = partial(_add_traffics, lock)
     list(pool.map(compose(_ff, get_traffics), switchs))
@@ -185,9 +189,12 @@ def add_traffics():
 
 def main():
     #  pass
-    #  add_groups()
+    add_groups()
     add_infs()
-    #  add_traffics()
+    #  starttime = time.time()
+    add_traffics()
+    #  endtime = time.time()
+    #  print(endtime - starttime)
 
 
 if __name__ == '__main__':
