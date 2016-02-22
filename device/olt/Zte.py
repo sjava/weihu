@@ -132,28 +132,10 @@ def get_infs(ip):
 
     try:
         child = telnet(ip)
-        rslt = do_some(child, 'show run | in interface')
+        rslt = do_some(child, 'show run | in interface', timeout=180)
         rslt = re_all(r'interface\s+(x?gei_\d+/\d+/\d+)', rslt)
         infs = lmap(partial(_get_info, child), rslt)
         close(child)
     except (pexpect.EOF, pexpect.TIMEOUT) as e:
         return ('fail', None, ip)
     return ('success', infs, ip)
-
-
-def get_traffics(ip, infs):
-    def _get_traffic(child, inf):
-        rslt = do_some(child, 'show int {inf}'.format(inf=inf))
-        state = re_find(r'{inf}\s+is\s+(\w+)'.format(inf=inf), rslt).lower()
-        bw = int(re_find(r'BW\s+(\d+)\s+Kbits', rslt))
-        inTraffic = int(re_find(r'seconds\sinput\srate\s?:\s+(\d+)\s+Bps', rslt)) * 8 / 10e6
-        outTraffic = int(re_find(r'seconds\soutput\srate\s?:\s+(\d+)\s+Bps', rslt)) * 8 / 10e6
-        return dict(name=inf, state=state, bw=bw, inTraffic=inTraffic, outTraffic=outTraffic)
-
-    try:
-        child = telnet(ip)
-        rslt = lmap(partial(_get_traffic, child), infs)
-        close(child)
-    except (pexpect.EOF, pexpect.TIMEOUT) as e:
-        return ('fail', None, ip)
-    return ('success', rslt, ip)
