@@ -114,11 +114,11 @@ def add_groups():
 
 
 def main():
-    #  pass
-    start = time.time()
+    pass
+    #  start = time.time()
     #  add_infs()
-    add_groups()
-    print(time.time() - start)
+    #  add_groups()
+    #  print(time.time() - start)
 
 if __name__ == '__main__':
     main()

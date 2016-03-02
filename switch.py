@@ -5,13 +5,15 @@ import re
 import time
 import pexpect
 import configparser
+import easysnmp
 from multiprocess import Pool, Manager
 from py2neo import Graph, Node, authenticate
-from funcy import lmap, compose, partial, re_find
+from funcy import lmap, compose, partial, re_find, select
 from device.switch import S85, S93, T64, S89, S8905E
 
 config = configparser.ConfigParser()
 config.read('config.ini')
+community = config.get('switch', 'community')
 neo4j_username = config.get('neo4j', 'username')
 neo4j_password = config.get('neo4j', 'password')
 
@@ -41,22 +43,71 @@ def import_sw(file):
     lmap(lambda x: graph.create(create_sw_node(x)), switchs)
 
 
-def version_check():
+def add_snmp_read():
     clear_log()
-    nodes = graph.cypher.execute("match (s:Switch) where s.model='S8905' return s.ip as ip")
+    nodes = graph.cypher.execute("match (s:Switch) where s.model='T64G' return s.ip as ip")
+    ips = [x['ip'] for x in nodes]
+    for ip in ips:
+        rslt = 'success'
+        try:
+            child = T64.telnet(ip)
+            child.sendline('config t')
+            child.expect('#')
+            T64.do_some(child, 'snmp-server community weihu@YCIP view AllView ro')
+            T64.close(child)
+        except (pexpect.EOF, pexpect.TIMEOUT) as e:
+            rslt = 'fail'
+        session = easysnmp.Session(hostname=ip, community='weihu@YCIP', version=1)
+        try:
+            item = session.get('1.3.6.1.2.1.1.1.0')
+        except (easysnmp.EasySNMPTimeoutError) as e:
+            rslt = 'fail'
+        with open(log_file, 'a') as flog:
+            flog.write('{ip}:{rslt}\n'.format(ip=ip, rslt=rslt))
+
+
+def update_model():
+    clear_log()
+    nodes = graph.cypher.execute("match (s:Switch) return s.ip as ip")
     switchs = [x['ip'] for x in nodes]
     for x in switchs:
+        mark = 'success'
         try:
-            child = S89.telnet(x)
-            rslt = S89.do_some(child, 'show version')
-            S89.close(child)
-        except (pexpect.EOF, pexpect.TIMEOUT) as e:
-            continue
-        version = re_find(r'zxr10\s(\S+)\ssoftware', rslt, flags=re.I)
-        graph.cypher.execute("match (s:Switch) where s.ip={ip} set s.model={model}",
-                             ip=x, model='S' + version)
-        with open(result_file, 'a') as frslt:
-            frslt.write('{ip}:{version}\n'.format(ip=x, version=version))
+            session = easysnmp.Session(hostname=x, community=community, version=1)
+            rslt = session.get('1.3.6.1.2.1.1.1.0').value
+            model = re_find(r'(?:Quidway (S\d+)|ZXR10 (\w+) Software)', rslt)
+            model = select(bool, model)[0]
+            if model.startswith('8905'):
+                model = 'S' + model
+            hostname = session.get('1.3.6.1.2.1.1.5.0').value
+        except (easysnmp.EasySNMPTimeoutError) as e:
+            mark = 'fail'
+        if mark == 'success':
+            graph.cypher.execute("match (s:Switch) where s.ip={ip} set s.model={model},s.hostname={hostname}",
+                                 ip=x, model=model, hostname=hostname)
+        with open(log_file, 'a') as flog:
+            flog.write('{ip}:{mark}\n'.format(ip=x, mark=mark))
+
+
+def del_old_data():
+    cmd1 = """
+    match (:Switch)-->(i:Inf)
+    where timestamp()-i.updated>=24*60*60*1000*2
+    detach delete i
+    """
+    cmd2 = """
+    match (:Switch)-->(g:Group)
+    where timestamp()-g.updated>=24*60*60*1000*2
+    detach delete g
+    """
+    cmd3 = """
+    match (:Switch)-->(:Group)-[r]->(:Inf)
+    where timestamp()-r.updated>=24*60*60*1000*2
+    detach delete r
+    """
+    graph.cypher.execute(cmd1)
+    graph.cypher.execute(cmd2)
+    graph.cypher.execute(cmd3)
 
 
 def _model(funcs, device):
@@ -111,18 +162,17 @@ def _add_infs(lock, record):
     statement = """
     match (s:Switch {ip:{ip}})
     merge (s)-[:HAS]->(i:Inf {name:{name}})
-    on create set i.desc={desc},i.updated=timestamp()
-    on match set i.desc={desc},i.updated=timestamp()
+    set i.desc={desc},i.updated=timestamp()
     with s,i
     match (s)-->(g:Group {name:{group}})
     merge (g)-[r:OWNED]->(i)
-    on create set r.updated=timestamp()
-    on match set r.updated=timestamp()"""
+    set r.updated=timestamp()
+    """
 
     with lock:
         if mark == 'success':
             tx = graph.cypher.begin()
-            lmap(lambda x: tx.append(statement, ip=ip, **x), infs)
+            lmap(lambda x: tx.append(statement, ip=ip, name=x['name'], desc=x['desc'], group=x['group']), infs)
             tx.process()
             tx.commit()
         with open(log_file, 'a') as flog:
@@ -189,12 +239,12 @@ def add_traffics():
 
 def main():
     #  pass
+    starttime = time.time()
     add_groups()
     add_infs()
-    #  starttime = time.time()
     add_traffics()
-    #  endtime = time.time()
-    #  print(endtime - starttime)
+    endtime = time.time()
+    print(endtime - starttime)
 
 
 if __name__ == '__main__':

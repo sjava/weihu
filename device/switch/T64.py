@@ -4,6 +4,7 @@ import configparser
 import pexpect
 import sys
 import re
+from functools import reduce
 from funcy import distinct, re_find, rcompose, partial, map, lmap
 from funcy import re_all
 
@@ -62,7 +63,7 @@ def get_groups(ip):
     def _get_desc(child, group):
         name = group['name']
         rslt = do_some(child, 'show run interface {name}'.format(name=name))
-        desc = re_find(r'description\s(\S+)', rslt)
+        desc = re_find(r'description\s(\S+ *\S*)', rslt)
         group['desc'] = desc
         return group
 
@@ -86,9 +87,9 @@ def get_infs(ip):
     def _get_desc(child, inf):
         name = inf['name']
         rslt = do_some(child, 'show run interface {name}'.format(name=name))
-        desc = re_find(r'description\s(\S+)', rslt)
+        desc = re_find(r'description\s(\S+ *\S*)', rslt)
         group = re_find(r'(smartgroup\s\d+)', rslt)
-        if group is not None:
+        if group:
             group = group.replace(' ', '')
         inf['desc'] = desc
         inf['group'] = group
@@ -96,7 +97,7 @@ def get_infs(ip):
 
     try:
         child = telnet(ip)
-        rslt = do_some(child, 'show run | in interface (xg|g)ei_')
+        rslt = do_some(child, 'show run | in interface (xg|g|f)ei_')
         temp = [dict(name=x) for x in re_all('interface\s(\S+)', rslt)]
         get_desc = partial(_get_desc, child)
         infs = lmap(get_desc, temp)
@@ -124,6 +125,25 @@ def get_traffics(ip, infs):
     except (pexpect.EOF, pexpect.TIMEOUT) as e:
         return ('fail', None, ip)
     return ('success', rslt, ip)
+
+
+def get_vlans(ip):
+    def _vlan(v):
+        if '-' in v:
+            s, e = [int(x) for x in v.split('-')]
+        else:
+            s = e = int(v)
+        return range(s, e + 1)
+
+    try:
+        child = telnet(ip)
+        rslt = do_some(child, 'show run | in (hybrid|trunk) vlan')
+        close(child)
+        vlans = re_all(r'vlan\s(\d+(?:-\d+)?)', rslt)
+        vlans = reduce(lambda x, y: x | set(_vlan(y)), vlans, set())
+    except (pexpect.EOF, pexpect.TIMEOUT) as e:
+        return ('fail', None, ip)
+    return ('success', list(vlans), ip)
 
 
 def main():

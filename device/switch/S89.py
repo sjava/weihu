@@ -4,7 +4,9 @@ import pexpect
 import configparser
 import sys
 import re
+from functools import reduce
 from funcy import re_all, ldistinct, re_find, lmap, partial
+from funcy import re_find, select
 
 pager = "--More--"
 prompter = "#"
@@ -61,7 +63,7 @@ def get_groups(ip):
     def _get_desc(child, group):
         name = group['name']
         rslt = do_some(child, 'show run interface {name}'.format(name=name))
-        desc = re_find(r'description\s(\S+)', rslt)
+        desc = re_find(r'description\s(\S+ *\S*)', rslt)
         group['desc'] = desc
         return group
 
@@ -83,7 +85,7 @@ def get_infs(ip):
     def _get_desc(child, inf):
         name = inf['name']
         rslt = do_some(child, 'show run interface {name}'.format(name=name))
-        desc = re_find(r'description\s(\S+)', rslt)
+        desc = re_find(r'description\s(\S+ *\S*)', rslt)
         group = re_find(r'(smartgroup\s\d+)', rslt)
         if group is not None:
             group = group.replace(' ', '')
@@ -106,7 +108,7 @@ def get_infs(ip):
 def get_traffics(ip, infs):
     def _get_traffic(child, inf):
         rslt = do_some(child, 'show interface {inf}'.format(inf=inf))
-        state = re_find(r'{inf}\sis\s(\w+\s?\w+)'.format(inf=inf),
+        state = re_find(r'{inf}\sis\s(\w+\s?\w*)'.format(inf=inf),
                         rslt).lower()
         bw = int(re_find(r'BW\s(\d+)\sKbits', rslt)) / 1000
         inTraffic = int(re_find(r'120 seconds input.*:\s+(\d+)\sBps', rslt)) * 8 / 1000000
@@ -120,4 +122,44 @@ def get_traffics(ip, infs):
         close(child)
     except (pexpect.EOF, pexpect.TIMEOUT) as e:
         return ('fail', None, ip)
+    return ('success', rslt, ip)
+
+
+def get_vlans(ip):
+    def _vlan(v):
+        if '-' in v:
+            s, e = [int(x) for x in v.split('-')]
+        else:
+            s = e = int(v)
+        return range(s, e + 1)
+
+    try:
+        child = telnet(ip)
+        rslt = do_some(child, 'show run | in (hybrid|trunk) vlan')
+        close(child)
+        vlans = re_all(r'vlan\s(\d+(?:-\d+)?)', rslt)
+        vlans = reduce(lambda x, y: x | set(_vlan(y)), vlans, set())
+    except (pexpect.EOF, pexpect.TIMEOUT) as e:
+        return ('fail', None, ip)
+    return ('success', list(vlans), ip)
+
+
+def get_ports(ip):
+    def _get_info(record):
+        name = re_find(r'((?:xg|g|f)ei\S+) is \w+ ?\w+,', record)
+        state = re_find(r'(?:xg|g|f)ei\S+ is (\w+ ?\w+),', record)
+        desc = re_find(r'Description is (\S+ *\S+)', record)
+        inTraffic = int(re_find(r'120 seconds input.*:\s+(\d+)\sBps', record) or 0) * 8 / 1000000
+        outTraffic = int(re_find(r'120 seconds output.*:\s+(\d+)\sBps', record) or 0) * 8 / 1000000
+        return dict(name=name, desc=desc, state=state, inTraffic=inTraffic, outTraffic=outTraffic)
+
+    try:
+        child = telnet(ip)
+        rslt = do_some(child, 'show interface')
+        close(child)
+    except (pexpect.EOF, pexpect.TIMEOUT) as e:
+        return ('fail', None, ip)
+    rslt = re.split(r'\r\n *\r\n', rslt)
+    rslt = select(lambda x: bool(x['name']),
+                  lmap(_get_info, rslt))
     return ('success', rslt, ip)

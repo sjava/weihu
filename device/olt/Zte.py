@@ -105,7 +105,7 @@ def get_groups(ip):
 
     try:
         child = telnet(ip)
-        rslt = do_some(child, 'show lacp internal').split('\r\n\r\n')
+        rslt = re.split(r'\r\n\s*\r\n', do_some(child, 'show lacp internal'))
         groups = thread_last(rslt,
                              (lmap, _get_infs),
                              (select, lambda x: x['name'] and x['infs']))

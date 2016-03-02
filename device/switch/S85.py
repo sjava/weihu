@@ -4,8 +4,9 @@ import configparser
 import pexpect
 import sys
 import re
-from funcy import filter, re_find, map, lmap, partial
-from funcy import select_values, re_all, update_in
+from functools import reduce
+from funcy import filter, re_find, map, lmap, partial, select
+from funcy import select_values, re_all, update_in, re_test
 
 pager = "---- More ----"
 prompter = "]"
@@ -62,7 +63,7 @@ def do_some(child, cmd):
 def get_infs(ip):
     def _inf(record):
         name = re_find(r'interface\s+(X?Gigabit\S+)', record)
-        desc = re_find(r'description\s+(\S+)', record)
+        desc = re_find(r'description\s+(\S+ *\S*)', record)
         group = re_find(r'link-aggregation\s+(group\s+\d+)', record)
         return dict(name=name, desc=desc, group=group)
 
@@ -85,7 +86,7 @@ def get_groups(ip):
     except (pexpect.EOF, pexpect.TIMEOUT) as e:
         return ('fail', None, ip)
     temp = re_all(r'(group\s+\d+)\s+mode\s+(\w+)', rslt)
-    temp1 = dict(re_all(r'(group\s+\d+)\s+description\s+(\S+)', rslt))
+    temp1 = dict(re_all(r'(group\s+\d+)\s+description\s+(\S+ *\S*)', rslt))
     rslt1 = [dict(name=x[0],
                   mode=x[1],
                   desc=temp1.get(x[0], None)) for x in temp]
@@ -115,6 +116,47 @@ def get_traffics(ip, infs):
         child = telnet(ip)
         rslt = lmap(partial(_get_traffic, child), infs)
         close(child)
+    except (pexpect.EOF, pexpect.TIMEOUT) as e:
+        return ('fail', None, ip)
+    return ('success', rslt, ip)
+
+
+def get_vlans(ip):
+    def _vlan(record):
+        if re_test(r'(Ports:\snone.*Ports:\snone)', record, re.S):
+            return 0
+        vlan = re_find(r'VLAN\sID:\s(\d+)', record)
+        vlan = int(vlan or 0)
+        return vlan
+
+    try:
+        child = telnet(ip)
+        rslt = do_some(child, 'disp vlan all')
+        close(child)
+        rslt = re.split(r'\r\n *\r\n', rslt)
+        vlans = select(lambda x: x > 1,
+                       lmap(_vlan, rslt))
+    except (pexpect.EOF, pexpect.TIMEOUT) as e:
+        return ('fail', None, ip)
+    return ('success', vlans, ip)
+
+
+def get_ports(ip):
+    def _get_info(record):
+        name = re_find(r'(\S+) current state :', record)
+        state = re_find(r'current state : ?(\S+ ?\S+)', record)
+        desc = re_find(r'Description: (\S+ *\S+)', record)
+        inTraffic = int(re_find(r'\d+ seconds input:\s+\d+\spackets/sec\s(\d+)\sbits/sec', record) or 0) / 1000000
+        outTraffic = int(re_find(r'\d+ seconds output:\s+\d+\spackets/sec\s(\d+)\sbits/sec', record) or 0) / 1000000
+        return dict(name=name, desc=desc, state=state, inTraffic=inTraffic, outTraffic=outTraffic)
+
+    try:
+        child = telnet(ip)
+        rslt = do_some(child, 'disp interface')
+        close(child)
+        rslt = re.split(r'\r\n *\r\n', rslt)
+        rslt = select(lambda x: bool(x['name']),
+                      lmap(_get_info, rslt))
     except (pexpect.EOF, pexpect.TIMEOUT) as e:
         return ('fail', None, ip)
     return ('success', rslt, ip)

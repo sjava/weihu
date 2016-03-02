@@ -58,9 +58,9 @@ def bingfa_check():
 
 def _add_bingfa(rslt):
     cmd = """
-    merge (b:Bras {ip:{ip}})-[:HAS]->(c:Card {slot:{slot}})
-    on match set c.peakUsers={peakUsers},c.peakTime={peakTime},c.updated=timestamp()
-    on create set c.peakUsers={peakUsers},c.peakTime={peakTime},c.updated=timestamp()
+    match (b:Bras {ip:{ip}})
+    merge (b)-[:HAS]->(c:Card {slot:{slot}})
+    set c.peakUsers={peakUsers},c.peakTime={peakTime},c.updated=timestamp()
     """
     mark, record, ip = rslt
     with open(logFile, 'a') as flog:
@@ -85,9 +85,8 @@ def add_bingfa():
 
 
 def main():
-    pass
-    #  bingfa_check()
-
+    #  pass
+    add_bingfa()
 
 if __name__ == '__main__':
     main()

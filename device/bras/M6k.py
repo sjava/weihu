@@ -4,7 +4,8 @@ import configparser
 import pexpect
 import sys
 import re
-from funcy import re_find, select
+from funcy import re_find, select, distinct, re_all
+from funcy import lmapcat, partial, count_by
 
 prompter = "#"
 pager = "--More--"
@@ -67,3 +68,21 @@ def get_bingfa(ip):
     rslt3 = select(bool, rslt2)
     rslt3 = [(x[0], int(x[1]), x[2]) for x in rslt3]
     return ('success', rslt3, ip)
+
+
+def get_vlan_users(ip, inf):
+    def _get_users(child, i):
+        rslt = do_some(child, 'show subscriber interface {i} | in external-vlan'.format(i=i))
+        vlans = re_all(r'external-vlan\s+:(\d+)', rslt)
+        return vlans
+
+    try:
+        child = telnet(ip)
+        rslt = do_some(child, 'show running-config | in smartgroup{inf}\.'.format(inf=inf))
+        infs = distinct(re_all(r'(smartgroup\S+)', rslt))
+        vlans = lmapcat(partial(_get_users, child), infs)
+        close(child)
+        vlans = count_by(int, vlans)
+    except (pexpect.EOF, pexpect.TIMEOUT) as e:
+        return ('fail', None, ip)
+    return ('success', vlans, ip)

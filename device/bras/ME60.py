@@ -3,8 +3,8 @@
 import pexpect
 import configparser
 import sys
-from funcy import re_find, select, map, compose, partial
-from funcy import lmap
+from funcy import re_find, select, map, compose, partial, lmapcat
+from funcy import lmap, re_all, join_with, identity, count_by
 
 prompter = "]"
 pager = "---- More ----"
@@ -73,3 +73,21 @@ def get_bingfa(ip):
     except (pexpect.EOF, pexpect.TIMEOUT) as e:
         return ('fail', None, ip)
     return ('success', maxUsers, ip)
+
+
+def get_vlan_users(ip, inf):
+    def _get_users(child, i):
+        rslt = do_some(child, 'disp access-user interface {i} | in /'.format(i=i))
+        users = re_all(r'(\d+)/', rslt)
+        return users
+
+    try:
+        child = telnet(ip)
+        infs = do_some(child, 'disp cu interface | in Eth-Trunk{inf}\.'.format(inf=inf))
+        infs = re_all(r'interface (\S+)', infs)
+        rslt = lmapcat(partial(_get_users, child), infs)
+        close(child)
+        rslt = count_by(int, rslt)
+    except (pexpect.EOF, pexpect.TIMEOUT) as e:
+        return ('fail', None, ip)
+    return ('success', rslt, ip)

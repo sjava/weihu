@@ -61,7 +61,7 @@ def get_groups(ip):
     def _get_desc(child, group):
         name = group['name']
         rslt = do_some(child, 'show running-config-interface {name}'.format(name=name))
-        desc = re_find(r'description\s(\S+)', rslt)
+        desc = re_find(r'description\s(\S+ *\S*)', rslt)
         mode = re_find(r'lacp\smode\s(\S+)', rslt)
         group['desc'] = desc
         group['mode'] = mode
@@ -83,7 +83,7 @@ def get_infs(ip):
     def _get_desc(child, inf):
         name = inf['name']
         rslt = do_some(child, 'show running-config-interface {name}'.format(name=name))
-        desc = re_find(r'description\s(\S+)', rslt)
+        desc = re_find(r'description\s(\S+ *\S*)', rslt)
         group = re_find(r'(smartgroup\s\d+)', rslt)
         if group is not None:
             group = group.replace(' ', '')
@@ -119,4 +119,38 @@ def get_traffics(ip, infs):
         close(child)
     except (pexpect.EOF, pexpect.TIMEOUT) as e:
         return ('fail', None, ip)
+    return ('success', rslt, ip)
+
+
+def get_vlans(ip):
+    try:
+        child = telnet(ip)
+        rslt = do_some(child, 'show vlan | in vlan')
+        close(child)
+        vlans = re_all(r'(\d+)\s+vlan\d{4} +\S+', rslt)
+        if '1' in vlans:
+            vlans.remove('1')
+        vlans = [int(x) for x in vlans]
+    except (pexpect.EOF, pexpect.TIMEOUT) as e:
+        return ('fail', None, ip)
+    return ('success', vlans, ip)
+
+
+def get_ports(ip):
+    def _get_info(record):
+        name = re_find(r'((?:xg|g|f)ei\S+) is \w+ ?\w*,', record)
+        state = re_find(r'(?:xg|g|f)ei\S+ is (\w+ ?\w+),', record)
+        desc = re_find(r'Description is (\S+ *\S+)', record)
+        inTraffic = int(re_find(r'120s input.*:\s(\d+)Bps', record)) * 8 / 1000000
+        outTraffic = int(re_find(r'120s output.*:\s(\d+)Bps', record)) * 8 / 1000000
+        return dict(name=name, desc=desc, state=state, inTraffic=inTraffic, outTraffic=outTraffic)
+
+    try:
+        child = telnet(ip)
+        rslt = do_some(child, 'show interface include ei- | in (is |put rate)')
+        close(child)
+    except (pexpect.EOF, pexpect.TIMEOUT) as e:
+        return ('fail', None, ip)
+    rslt = re.split(r'\r\n *(?=(?:xg|g|f)ei-)', rslt)
+    rslt = lmap(_get_info, rslt)
     return ('success', rslt, ip)
