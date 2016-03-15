@@ -3,6 +3,7 @@
 import pexpect
 import sys
 import re
+import os
 import configparser
 from funcy import re_find, re_all, lmap, partial
 from funcy import lmapcat
@@ -12,7 +13,7 @@ pager = "---- More.*----"
 logfile = sys.stdout
 
 config = configparser.ConfigParser()
-config.read('config.ini')
+config.read(os.path.expanduser('~/.weihu/config.ini'))
 username = config.get('olt', 'hw_username')
 password = config.get('olt', 'hw_password')
 
@@ -115,3 +116,14 @@ def get_infs(ip):
     except (pexpect.EOF, pexpect.TIMEOUT) as e:
         return ('fail', None, ip)
     return ('success', infs, ip)
+
+
+def get_main_card(ip):
+    try:
+        child = telnet(ip)
+        rslt = do_some(child, 'display board 0')
+        close(child)
+    except (pexpect.EOF, pexpect.TIMEOUT) as e:
+        return ('fail', None, ip)
+    cards = re_all(r'(SCUL|SCUN)\s+(?:Standby_normal|Active_normal)', rslt)
+    return ('success', len(cards), ip)

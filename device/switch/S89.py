@@ -4,6 +4,7 @@ import pexpect
 import configparser
 import sys
 import re
+import os
 from functools import reduce
 from funcy import re_all, ldistinct, re_find, lmap, partial
 from funcy import re_find, select
@@ -13,7 +14,7 @@ prompter = "#"
 logfile = sys.stdout
 
 config = configparser.ConfigParser()
-config.read('config.ini')
+config.read(os.path.expanduser('~/.weihu/config.ini'))
 username = config.get('switch', 'username')
 password = config.get('switch', 'passwd')
 super_password = config.get('switch', 'super_passwd')

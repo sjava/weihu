@@ -11,7 +11,8 @@ logFile = 'result/bas_log.txt'
 infoFile = 'result/bas_info.txt'
 
 conf = configparser.ConfigParser()
-conf.read('config.ini')
+conf.read(os.path.expanduser('~/.weihu/config.ini'))
+#  conf.read('config.ini')
 neo4j_username = conf.get('neo4j', 'username')
 neo4j_password = conf.get('neo4j', 'password')
 authenticate('localhost:7474', neo4j_username, neo4j_password)

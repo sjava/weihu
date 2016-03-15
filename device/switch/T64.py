@@ -4,16 +4,18 @@ import configparser
 import pexpect
 import sys
 import re
+import os
 from functools import reduce
+from toolz import thread_last
 from funcy import distinct, re_find, rcompose, partial, map, lmap
-from funcy import re_all
+from funcy import re_all, re_test, select
 
 pager = "--More--"
 prompter = "#"
 logfile = sys.stdout
 
 config = configparser.ConfigParser()
-config.read('config.ini')
+config.read(os.path.expanduser('~/.weihu/config.ini'))
 username = config.get('switch', 'username')
 password = config.get('switch', 'passwd')
 super_password = config.get('switch', 'super_passwd')
@@ -144,6 +146,28 @@ def get_vlans(ip):
     except (pexpect.EOF, pexpect.TIMEOUT) as e:
         return ('fail', None, ip)
     return ('success', list(vlans), ip)
+
+
+def get_ports(ip):
+    def _get_info(record):
+        name = re_find(r'^((?:xg|g|f)ei\S+) is \w+ ?\w+,', record)
+        state = re_find(r'^(?:xg|g|f)ei\S+ is (\w+ ?\w+),', record)
+        desc = re_find(r'Description is (\S+ *\S+)', record)
+        inTraffic = int(re_find(r'120 seconds input.*:\s+(\d+)\sBps', record) or 0) * 8 / 1000000
+        outTraffic = int(re_find(r'120 seconds output.*:\s+(\d+)\sBps', record) or 0) * 8 / 1000000
+        return dict(name=name, desc=desc, state=state, inTraffic=inTraffic, outTraffic=outTraffic)
+
+    try:
+        child = telnet(ip)
+        rslt = do_some(child, 'show interface')
+        close(child)
+    except (pexpect.EOF, pexpect.TIMEOUT) as e:
+        return ('fail', None, ip)
+    rslt = thread_last(rslt,
+                       (re.split, r'\r\r\n *\r\r\n *'),
+                       (select, r'^(?:xg|g|f)ei_'),
+                       (lmap, _get_info))
+    return ('success', rslt, ip)
 
 
 def main():

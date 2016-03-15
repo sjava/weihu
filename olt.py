@@ -1,18 +1,19 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 import configparser
+import pexpect
 import os
 import multiprocessing
 from multiprocess import Pool, Manager
 from py2neo import Graph, Node
 from py2neo import authenticate
 from toolz import thread_last
-from funcy import partial, compose, lmap
+from funcy import partial, compose, lmap, re_all, re_test
 from device.olt import Zte, Huawei
 import time
 
 config = configparser.ConfigParser()
-config.read('config.ini')
+config.read(os.path.expanduser('~/.weihu/config.ini'))
 neo4j_username = config.get('neo4j', 'username')
 neo4j_password = config.get('neo4j', 'password')
 
@@ -113,12 +114,71 @@ def add_groups():
     pool.join()
 
 
+def _add_main_card(lock, record):
+    mark, rslt, ip = record
+    stmt = """
+    match (n:Olt) where n.ip={ip}
+    set n.mainCard={rslt}
+    """
+    with lock:
+        with open(result_file, 'a') as frslt:
+            frslt.write('{ip}:{mark}\n'.format(ip=ip, mark=mark))
+        if mark == 'success':
+            tx = graph.cypher.begin()
+            tx.append(stmt, ip=ip, rslt=rslt)
+            tx.process()
+            tx.commit()
+
+
+def add_main_card():
+    funcs = {'zte': Zte.get_main_card, 'hw': Huawei.get_main_card}
+    get_main_card = partial(_company, funcs)
+    clear_log()
+
+    nodes = graph.cypher.execute(
+        'match (n: Olt) return n.ip as ip, n.company as company')
+    olts = [dict(ip=x['ip'], company=x['company'])
+            for x in nodes]
+    pool = Pool(128)
+    lock = Manager().Lock()
+    _add_main_card_p = partial(_add_main_card, lock)
+    list(pool.map(compose(_add_main_card_p, get_main_card), olts))
+    pool.close()
+    pool.join()
+
+
+def temp():
+    nodes = graph.cypher.execute('match (n:Olt) where n.company="hw" return n.ip')
+    olts = [x[0] for x in nodes]
+    allSlots = 0
+    useSlots = 0
+    for ip in olts:
+        mark = True
+        try:
+            child = Huawei.telnet(ip)
+            rslt = Huawei.do_some(child, 'disp board 0')
+            Huawei.close(child)
+            slots = re_all(r'(Normal|normal)', rslt)
+            #  if re_test(r'GCS', rslt):
+            #  allSlots += 14
+            #  else:
+            #  allSlots += 21
+            allSlots += 21
+            useSlots += len(slots)
+        except (pexpect.EOF, pexpect.TIMEOUT) as e:
+            with open(log_file, 'a') as flog:
+                flog.write('{ip}:fail\n'.format(ip=ip))
+    print("all slots:{allSlots}".format(allSlots=allSlots))
+    print("use slots:{useSlots}".format(useSlots=useSlots))
+
+
 def main():
-    pass
-    #  start = time.time()
+    #  pass
+    start = time.time()
     #  add_infs()
     #  add_groups()
-    #  print(time.time() - start)
+    #  add_main_card()
+    print(time.time() - start)
 
 if __name__ == '__main__':
     main()

@@ -3,6 +3,7 @@
 import pexpect
 import configparser
 import sys
+import os
 from funcy import re_find, select, map, compose, partial, lmapcat
 from funcy import lmap, re_all, join_with, identity, count_by
 
@@ -11,7 +12,7 @@ pager = "---- More ----"
 logfile = sys.stdout
 
 conf = configparser.ConfigParser()
-conf.read('config.ini')
+conf.read(os.path.expanduser('~/.weihu/config.ini'))
 username = conf.get('bras', 'username')
 password = conf.get('bras', 'password')
 

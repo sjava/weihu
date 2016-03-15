@@ -12,7 +12,7 @@ from funcy import lmap, compose, partial, re_find, select
 from device.switch import S85, S93, T64, S89, S8905E
 
 config = configparser.ConfigParser()
-config.read('config.ini')
+config.read(os.path.expanduser('~/.weihu/config.ini'))
 community = config.get('switch', 'community')
 neo4j_username = config.get('neo4j', 'username')
 neo4j_password = config.get('neo4j', 'password')
@@ -240,9 +240,9 @@ def add_traffics():
 def main():
     #  pass
     starttime = time.time()
-    add_groups()
+    #  add_groups()
     add_infs()
-    add_traffics()
+    #  add_traffics()
     endtime = time.time()
     print(endtime - starttime)
 

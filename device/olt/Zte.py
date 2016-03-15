@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 import pexpect
 import sys
+import os
 import configparser
 import re
 from funcy import re_all, partial, lmap, re_find
@@ -13,7 +14,7 @@ pager = "--More--"
 logfile = sys.stdout
 
 config = configparser.ConfigParser()
-config.read('config.ini')
+config.read(os.path.expanduser('~/.weihu/config.ini'))
 username = config.get('olt', 'zte_username')
 password = config.get('olt', 'zte_password')
 
@@ -139,3 +140,14 @@ def get_infs(ip):
     except (pexpect.EOF, pexpect.TIMEOUT) as e:
         return ('fail', None, ip)
     return ('success', infs, ip)
+
+
+def get_main_card(ip):
+    try:
+        child = telnet(ip)
+        rslt = do_some(child, 'show card')
+        close(child)
+        cards = re_all(r'\d\s+\d\s+\d{1,2}\s+(SCXM|GCSA).*(?:INSERVICE|STANDBY)', rslt)
+    except (pexpect.EOF, pexpect.TIMEOUT) as e:
+        return('fail', None, ip)
+    return ('success', len(cards), ip)
