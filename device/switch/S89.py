@@ -65,15 +65,18 @@ def get_groups(ip):
         name = group['name']
         rslt = do_some(child, 'show run interface {name}'.format(name=name))
         desc = re_find(r'description\s(\S+ *\S*)', rslt)
+        mode = re_find(r'smartgroup mode (\S+)', rslt)
+        if mode == '802.3ad':
+            mode = 'yes'
         group['desc'] = desc
+        group['mode'] = mode
         return group
 
     try:
         child = telnet(ip)
-        rslt = do_some(child, 'show run | in smartgroup [0-9]+')
-        temp = ldistinct(
-            re_all(r'smartgroup\s(\d+)\smode\s(\S+)', rslt))
-        temp1 = [dict(name='smartgroup' + x[0], mode=x[1])
+        rslt = do_some(child, 'show lacp internal')
+        temp = re_all(r'Smartgroup:(\d+)', rslt)
+        temp1 = [dict(name='smartgroup' + x)
                  for x in temp]
         groups = lmap(partial(_get_desc, child), temp1)
         close(child)

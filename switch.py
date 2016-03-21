@@ -190,7 +190,7 @@ def add_infs():
     get_infs = partial(_model, funcs)
     clear_log()
     nodes = graph.cypher.execute(
-        "match(s:Switch)  return s.ip as ip,s.model as model")
+        "match(s:Switch) return s.ip as ip,s.model as model")
     switchs = [dict(ip=x['ip'], model=x['model']) for x in nodes]
     pool = Pool(processor)
     lock = Manager().Lock()
@@ -240,8 +240,8 @@ def add_traffics():
 def main():
     #  pass
     starttime = time.time()
-    #  add_groups()
-    add_infs()
+    add_groups()
+    #  add_infs()
     #  add_traffics()
     endtime = time.time()
     print(endtime - starttime)

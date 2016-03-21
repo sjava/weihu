@@ -69,6 +69,8 @@ def get_groups(ip):
         mode = re_find(r'mode\s(\S+)', record)
         if mode is None:
             mode = 'manual'
+        elif 'lacp' in mode:
+            mode = 'yes'
         desc = re_find(r'description\s(\S+ *\S*)', record)
         return dict(name=name, mode=mode, desc=desc)
 

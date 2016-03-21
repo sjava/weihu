@@ -91,7 +91,7 @@ def get_groups(ip):
     rslt1 = [dict(name=x[0],
                   mode=x[1],
                   desc=temp1.get(x[0], None)) for x in temp]
-    rslt3 = [update_in(x, ['mode'], lambda y: 'lacp' if y == 'static' else y)
+    rslt3 = [update_in(x, ['mode'], lambda y: 'yes' if y == 'static' else y)
              for x in rslt1]
     return ('success', rslt3, ip)
 

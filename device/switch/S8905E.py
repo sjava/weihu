@@ -8,7 +8,7 @@ import os
 from funcy import re_all, ldistinct, re_find, lmap, partial
 
 pager = "--More--"
-prompter = "#"
+prompter = "#$"
 logfile = sys.stdout
 
 config = configparser.ConfigParser()
@@ -61,9 +61,11 @@ def close(child):
 def get_groups(ip):
     def _get_desc(child, group):
         name = group['name']
-        rslt = do_some(child, 'show running-config-interface {name}'.format(name=name))
+        rslt = do_some(child, 'show running-config-interface {name} all'.format(name=name))
         desc = re_find(r'description\s(\S+ *\S*)', rslt)
         mode = re_find(r'lacp\smode\s(\S+)', rslt)
+        if mode == '802.3ad':
+            mode = 'yes'
         group['desc'] = desc
         group['mode'] = mode
         return group

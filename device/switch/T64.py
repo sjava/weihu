@@ -67,6 +67,8 @@ def get_groups(ip):
         rslt = do_some(child, 'show run interface {name}'.format(name=name))
         desc = re_find(r'description\s(\S+ *\S*)', rslt)
         group['desc'] = desc
+        if group['mode'] == 'active':
+            group['mode'] = 'yes'
         return group
 
     try:
