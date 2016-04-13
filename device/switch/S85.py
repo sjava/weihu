@@ -163,9 +163,23 @@ def get_ports(ip):
     return ('success', rslt, ip)
 
 
-def main():
-    pass
+def get_main_card(ip):
+    try:
+        child = telnet(ip)
+        rslt = do_some(child, 'disp device')
+        close(child)
+    except (pexpect.EOF, pexpect.TIMEOUT) as e:
+        return ('fail', None, ip)
+    temp = re_all(r'LSB\dSRP\dN\d\s+(?:Master|Slave)', rslt)
+    return ('success', len(temp), ip)
 
 
-if __name__ == '__main__':
-    main()
+def get_power_info(ip):
+    try:
+        child = telnet(ip)
+        rslt = do_some(child, 'disp power')
+        close(child)
+    except (pexpect.EOF, pexpect.TIMEOUT) as e:
+        return ('fail', None, ip)
+    temp = re_all(r'Power\s+\d\sState:\sNormal', rslt)
+    return ('success', len(temp), ip)

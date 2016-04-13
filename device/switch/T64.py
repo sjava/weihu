@@ -9,6 +9,8 @@ from functools import reduce
 from toolz import thread_last
 from funcy import distinct, re_find, rcompose, partial, map, lmap
 from funcy import re_all, re_test, select
+import time
+import easysnmp
 
 pager = "--More--"
 prompter = "#"
@@ -19,6 +21,7 @@ config.read(os.path.expanduser('~/.weihu/config.ini'))
 username = config.get('switch', 'username')
 password = config.get('switch', 'passwd')
 super_password = config.get('switch', 'super_passwd')
+community_read = config.get('switch', 'community')
 
 
 def telnet(ip):
@@ -111,6 +114,34 @@ def get_infs(ip):
     return ('success', infs, ip)
 
 
+def get_infs_bySnmp(ip):
+    def _get_infs(oid):
+        index = oid.value
+        desc = 'None'
+        name = session.get(('ifDescr', index)).value
+        if ' ' in name:
+            name, desc = name.split(' ', 1)
+        state = session.get(('ifOperStatus', index)).value
+        if state == '1':
+            state = 'up'
+        else:
+            state = 'down'
+        bw = int(session.get(('ifSpeed', index)).value or 0)
+        collTime = time.time()
+        inCount = int(session.get(('ifInOctets', index)).value or 0)
+        outCount = int(session.get(('ifOutOctets', index)).value or 0)
+        return dict(name=name, desc=desc, state=state, bw=bw,
+                    inCount=inCount, outCount=outCount, collTime=collTime)
+
+    try:
+        session = easysnmp.Session(hostname=ip, community=community_read, version=1)
+        indexs = session.walk('ifIndex')
+        rslt = lmap(_get_infs, indexs)
+        return ('success', rslt, ip)
+    except (easysnmp.EasySNMPTimeoutError) as e:
+        return ('fail', None, ip)
+
+
 def get_traffics(ip, infs):
     def _get_traffic(child, inf):
         rslt = do_some(child, 'show interface {inf}'.format(inf=inf))
@@ -172,9 +203,23 @@ def get_ports(ip):
     return ('success', rslt, ip)
 
 
-def main():
-    pass
+def get_main_card(ip):
+    try:
+        child = telnet(ip)
+        rslt = do_some(child, 'show version')
+        close(child)
+    except (pexpect.EOF, pexpect.TIMEOUT) as e:
+        return ('fail', None, ip)
+    temp = re_all(r'MEC,\spanel\s\d,\s(?:slave|master)', rslt)
+    return ('success', len(temp), ip)
 
 
-if __name__ == '__main__':
-    main()
+def get_power_info(ip):
+    try:
+        child = telnet(ip)
+        rslt = do_some(child, 'show power')
+        close(child)
+    except (pexpect.EOF, pexpect.TIMEOUT) as e:
+        return ('fail', None, ip)
+    temp = re_all(r'Power\d\s+:\sWork', rslt)
+    return ('success', len(temp), ip)

@@ -151,3 +151,18 @@ def get_main_card(ip):
     except (pexpect.EOF, pexpect.TIMEOUT) as e:
         return('fail', None, ip)
     return ('success', len(cards), ip)
+
+
+def get_power_info(ip):
+    try:
+        child = telnet(ip)
+        temp = do_some(child, 'show alarm pool')
+        close(child)
+    except (pexpect.EOF, pexpect.TIMEOUT) as e:
+        return ('fail', None, ip)
+    powerInfo = re_find(r'Alarm Code\s+:\s+(33054|53504)', temp)
+    if powerInfo:
+        rslt = 'alarm'
+    else:
+        rslt = 'normal'
+    return ('success', rslt, ip)

@@ -92,3 +92,19 @@ def get_vlan_users(ip, inf):
     except (pexpect.EOF, pexpect.TIMEOUT) as e:
         return ('fail', None, ip)
     return ('success', rslt, ip)
+
+
+def get_ip_pool(ip):
+    def _get_sections(child, name):
+        rslt = do_some(child, 'disp cu configuration ip-pool {name}'.format(name=name))
+        sections = re_all(r'section \d+ (\S+) (\S+)', rslt)
+        return sections
+    try:
+        child = telnet(ip)
+        rslt = do_some(child, 'disp domain 163.js | in pool-name')
+        poolNames = re_all(r'pool-name\s+:\s(\S+)', rslt)
+        ips = lmapcat(partial(_get_sections, child), poolNames)
+        close(child)
+    except(pexpect.EOF, pexpect.TIMEOUT) as e:
+        return ('fail', None, ip)
+    return ('success', ips, ip)

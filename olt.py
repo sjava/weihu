@@ -147,29 +147,37 @@ def add_main_card():
     pool.join()
 
 
-def temp():
-    nodes = graph.cypher.execute('match (n:Olt) where n.company="hw" return n.ip')
-    olts = [x[0] for x in nodes]
-    allSlots = 0
-    useSlots = 0
-    for ip in olts:
-        mark = True
-        try:
-            child = Huawei.telnet(ip)
-            rslt = Huawei.do_some(child, 'disp board 0')
-            Huawei.close(child)
-            slots = re_all(r'(Normal|normal)', rslt)
-            #  if re_test(r'GCS', rslt):
-            #  allSlots += 14
-            #  else:
-            #  allSlots += 21
-            allSlots += 21
-            useSlots += len(slots)
-        except (pexpect.EOF, pexpect.TIMEOUT) as e:
-            with open(log_file, 'a') as flog:
-                flog.write('{ip}:fail\n'.format(ip=ip))
-    print("all slots:{allSlots}".format(allSlots=allSlots))
-    print("use slots:{useSlots}".format(useSlots=useSlots))
+def _add_power_info(lock, record):
+    mark, rslt, ip = record
+    stmt = """
+    match (n:Olt) where n.ip={ip}
+    set n.powerInfo={rslt}
+    """
+    with lock:
+        with open(log_file, 'a') as frslt:
+            frslt.write('{ip}:{mark}\n'.format(ip=ip, mark=mark))
+        if mark == 'success':
+            tx = graph.cypher.begin()
+            tx.append(stmt, ip=ip, rslt=rslt)
+            tx.process()
+            tx.commit()
+
+
+def add_power_info():
+    funcs = {'zte': Zte.get_power_info, 'hw': Huawei.get_power_info}
+    get_power_info = partial(_company, funcs)
+    clear_log()
+
+    nodes = graph.cypher.execute(
+        'match (n: Olt) return n.ip as ip, n.company as company')
+    olts = [dict(ip=x['ip'], company=x['company'])
+            for x in nodes]
+    pool = Pool(128)
+    lock = Manager().Lock()
+    _add_power_info_p = partial(_add_power_info, lock)
+    list(pool.map(compose(_add_power_info_p, get_power_info), olts))
+    pool.close()
+    pool.join()
 
 
 def main():
@@ -178,6 +186,7 @@ def main():
     #  add_infs()
     #  add_groups()
     #  add_main_card()
+    add_power_info()
     print(time.time() - start)
 
 if __name__ == '__main__':

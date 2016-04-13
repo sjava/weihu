@@ -24,12 +24,21 @@ def sw_tuopu():
     switch.add_traffics()
 
 
+def xunjian():
+    olt.add_main_card()
+    olt.add_power_info()
+    switch.add_main_card()
+    switch.add_power_info()
+
+
 sched.add_job(bas_add_bingfa, 'cron',
               day_of_week='0-6', hour='6', minute='15')
 sched.add_job(sw_tuopu, 'cron',
               day_of_week='0-6', hour='20', minute='00')
 sched.add_job(olt_tuopu, 'cron',
               day_of_week='0-6', hour='20', minute='30')
+sched.add_job(xunjian, 'cron',
+              day_of_week='0', hour='1', minute='30')
 #  sched.add_job(sw_add_traffics, 'cron',
 #  day_of_week='0-6', hour='18-22', minute='20/15')
 try:

@@ -127,3 +127,24 @@ def get_main_card(ip):
         return ('fail', None, ip)
     cards = re_all(r'(SCUL|SCUN)\s+(?:Standby_normal|Active_normal)', rslt)
     return ('success', len(cards), ip)
+
+
+def get_power_info(ip):
+    try:
+        child = telnet(ip)
+        child.sendline('conf')
+        child.expect(prompter)
+        child.sendline('interface emu 0')
+        child.expect(prompter)
+        temp = do_some(child, 'display fan alarm')
+        child.sendline('quit')
+        child.expect(prompter)
+        child.sendline('quit')
+        child.expect(prompter)
+        close(child)
+    except (pexpect.EOF, pexpect.TIMEOUT) as e:
+        return ('fail', None, ip)
+    rslt = re_find(r'Power fault\s+(\w+)', temp)
+    if rslt is None:
+        rslt = "alarm"
+    return ('success', rslt.lower(), ip)
