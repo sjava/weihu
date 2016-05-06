@@ -43,29 +43,6 @@ def import_sw(file):
     lmap(lambda x: graph.create(create_sw_node(x)), switchs)
 
 
-def add_snmp_read():
-    clear_log()
-    nodes = graph.cypher.execute("match (s:Switch) where s.model='T64G' return s.ip as ip")
-    ips = [x['ip'] for x in nodes]
-    for ip in ips:
-        rslt = 'success'
-        try:
-            child = T64.telnet(ip)
-            child.sendline('config t')
-            child.expect('#')
-            T64.do_some(child, 'snmp-server community weihu@YCIP view AllView ro')
-            T64.close(child)
-        except (pexpect.EOF, pexpect.TIMEOUT) as e:
-            rslt = 'fail'
-        session = easysnmp.Session(hostname=ip, community='weihu@YCIP', version=1)
-        try:
-            item = session.get('1.3.6.1.2.1.1.1.0')
-        except (easysnmp.EasySNMPTimeoutError) as e:
-            rslt = 'fail'
-        with open(log_file, 'a') as flog:
-            flog.write('{ip}:{rslt}\n'.format(ip=ip, rslt=rslt))
-
-
 def update_model():
     #  clear_log()
     nodes = graph.cypher.execute("match (s:Switch) return s.ip as ip")
@@ -73,9 +50,11 @@ def update_model():
     for x in switchs:
         mark = 'success'
         try:
-            session = easysnmp.Session(hostname=x, community=community, version=1)
+            session = easysnmp.Session(
+                hostname=x, community=community, version=1)
             rslt = session.get('1.3.6.1.2.1.1.1.0').value
-            model = re_find(r'((?<=Quidway )S\d+|(?<=ZXR10 )\w+(?= Software))', rslt)
+            model = re_find(
+                r'((?<=Quidway )S\d+|(?<=ZXR10 )\w+(?= Software))', rslt)
             #  model = re_find(r'(?:Quidway (S\d+)|ZXR10 (\w+) Software)', rslt)
             #  model = select(bool, model)[0]
             if model.startswith('8905'):
@@ -189,7 +168,8 @@ def _add_infs(lock, record):
     with lock:
         if mark == 'success':
             tx = graph.cypher.begin()
-            lmap(lambda x: tx.append(statement, ip=ip, name=x['name'], desc=x['desc'], group=x['group']), infs)
+            lmap(lambda x: tx.append(statement, ip=ip, name=x[
+                 'name'], desc=x['desc'], group=x['group']), infs)
             tx.process()
             tx.commit()
         #  with open(log_file, 'a') as flog:
@@ -245,7 +225,8 @@ def add_traffics():
     #  clear_log()
     nodes = graph.cypher.execute(
         "match (s:Switch)--(i:Inf) where s.snmpState='normal' return s.ip as ip,collect(i.name) as infs,s.model as model")
-    switchs = [dict(ip=x['ip'], infs=x['infs'], model=x['model']) for x in nodes]
+    switchs = [dict(ip=x['ip'], infs=x['infs'], model=x['model'])
+               for x in nodes]
     pool = Pool(processor)
     lock = Manager().Lock()
     _ff = partial(_add_traffics, lock)
@@ -331,11 +312,11 @@ def add_power_info():
 def main():
     #  pass
     starttime = time.time()
-    #  update_model()
+    update_model()
     #  del_old_data()
     #  add_groups()
     #  add_infs()
-    add_traffics()
+    #  add_traffics()
     #  add_main_card()
     #  add_power_info()
     endtime = time.time()
