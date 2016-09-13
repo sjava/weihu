@@ -108,9 +108,12 @@ def get_traffics(ip, infs):
             bw = int(bw.replace('M', ''))
         else:
             bw = int(bw.replace('G', '')) * 1000
-        inTraffic = int(re_find(r'\d+ seconds input:\s+\d+\spackets/sec\s(\d+)\sbits/sec', rslt)) / 1000000
-        outTraffic = int(re_find(r'\d+ seconds output:\s+\d+\spackets/sec\s(\d+)\sbits/sec', rslt)) / 1000000
-        infDict = dict(name=inf, state=state, bw=bw, inTraffic=inTraffic, outTraffic=outTraffic)
+        inTraffic = int(re_find(
+            r'\d+ seconds input:\s+\d+\spackets/sec\s(\d+)\sbits/sec', rslt)) / 1000000
+        outTraffic = int(re_find(
+            r'\d+ seconds output:\s+\d+\spackets/sec\s(\d+)\sbits/sec', rslt)) / 1000000
+        infDict = dict(name=inf, state=state, bw=bw,
+                       inTraffic=inTraffic, outTraffic=outTraffic)
         return infDict
 
     try:
@@ -147,8 +150,10 @@ def get_ports(ip):
         name = re_find(r'(\S+) current state :', record)
         state = re_find(r'current state : ?(\S+ ?\S+)', record)
         desc = re_find(r'Description: (\S+ *\S+)', record)
-        inTraffic = int(re_find(r'\d+ seconds input:\s+\d+\spackets/sec\s(\d+)\sbits/sec', record) or 0) / 1000000
-        outTraffic = int(re_find(r'\d+ seconds output:\s+\d+\spackets/sec\s(\d+)\sbits/sec', record) or 0) / 1000000
+        inTraffic = int(re_find(
+            r'\d+ seconds input:\s+\d+\spackets/sec\s(\d+)\sbits/sec', record) or 0) / 1000000
+        outTraffic = int(re_find(
+            r'\d+ seconds output:\s+\d+\spackets/sec\s(\d+)\sbits/sec', record) or 0) / 1000000
         return dict(name=name, desc=desc, state=state, inTraffic=inTraffic, outTraffic=outTraffic)
 
     try:
@@ -161,6 +166,28 @@ def get_ports(ip):
     except (pexpect.EOF, pexpect.TIMEOUT) as e:
         return ('fail', None, ip)
     return ('success', rslt, ip)
+
+
+def no_shut(ip, inf):
+    try:
+        child = telnet(ip)
+        do_some(child, 'interface {inf}'.format(inf=inf))
+        do_some(child, 'undo shutdown')
+        close(child)
+    except (pexpect.EOF, pexpect.TIMEOUT) as e:
+        return ('fail', ip)
+    return ('success', ip)
+
+
+def get_inf(ip, inf):
+    try:
+        child = telnet(ip)
+        rslt = do_some(child, 'display interface {inf}'.format(inf=inf))
+        close(child)
+    except (pexpect.EOF, pexpect.TIMEOUT) as e:
+        return ('fail', None, ip)
+    state = re_find(r'current state :(\w+\s?\w+)', rslt)
+    return ('success', state, ip)
 
 
 def get_main_card(ip):

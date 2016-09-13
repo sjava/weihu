@@ -135,7 +135,7 @@ def _add_groups(lock, record):
 def add_groups():
     funcs = {'S8508': S85.get_groups,
              'S8505': S85.get_groups,
-             'T64g': T64.get_groups,
+             'T64G': T64.get_groups,
              'S8905': S89.get_groups,
              'S8905E': S8905E.get_groups,
              'S9306': S93.get_groups,
@@ -313,10 +313,10 @@ def main():
     #  pass
     starttime = time.time()
     update_model()
-    #  del_old_data()
-    #  add_groups()
-    #  add_infs()
-    #  add_traffics()
+    del_old_data()
+    add_groups()
+    add_infs()
+    add_traffics()
     #  add_main_card()
     #  add_power_info()
     endtime = time.time()

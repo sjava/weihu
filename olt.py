@@ -25,6 +25,22 @@ authenticate('61.155.48.36:7474', neo4j_username, neo4j_password)
 graph = Graph("http://61.155.48.36:7474/db/data")
 
 
+def import_olt():
+    cmd = """
+    create (n:Olt)
+    set n.hostname={hostname},n.ip={ip},n.company={company},n.area={area}
+    """
+    tx = graph.cypher.begin()
+    with open('olt-iposs.csv', 'r') as folt:
+        for x in folt:
+            hostname, ip, company, area = x.strip().split(',')
+            print('{0}:{1}:{2}:{3}'.format(hostname, ip, company, area))
+            tx.append(cmd, hostname=hostname, ip=ip,
+                      company=company, area=area)
+    tx.process()
+    tx.commit()
+
+
 def clear_log():
     for f in [log_file, result_file]:
         if os.path.exists(f):
@@ -90,7 +106,8 @@ def _add_groups(lock, record):
         if mark == 'success' and groups:
             tx = graph.cypher.begin()
             for x in groups:
-                tx.append(stmt1, ip=ip, name=x['name'], desc=x['desc'], mode=x['mode'])
+                tx.append(stmt1, ip=ip, name=x['name'], desc=x[
+                          'desc'], mode=x['mode'])
                 for infName in x['infs']:
                     tx.append(stmt2, infName=infName, ip=ip, name=x['name'])
             tx.process()
@@ -181,13 +198,14 @@ def add_power_info():
 
 
 def main():
-    #  pass
-    start = time.time()
+    pass
+    # start = time.time()
     #  add_infs()
     #  add_groups()
     #  add_main_card()
-    add_power_info()
-    print(time.time() - start)
+    # add_power_info()
+    # print(time.time() - start)
+    # import_olt()
 
 if __name__ == '__main__':
     main()

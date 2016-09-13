@@ -91,7 +91,8 @@ def get_groups(ip):
 
 def get_infs(ip):
     def _get_info(record):
-        name = re_find(r'interface\s(x?gigabitethernet\S+)', record, flags=re.I)
+        name = re_find(r'interface\s(x?gigabitethernet\S+)',
+                       record, flags=re.I)
         desc = re_find(r'description\s(\S+ *\S*)', record)
         group = re_find(r'(eth-trunk\s\d+)', record)
         return dict(name=name, desc=desc, group=group)
@@ -127,7 +128,8 @@ def get_infs_bySnmp(ip):
                     inCount=inCount, outCount=outCount, collTime=collTime)
 
     try:
-        session = easysnmp.Session(hostname=ip, community=community_read, version=1)
+        session = easysnmp.Session(
+            hostname=ip, community=community_read, version=1)
         indexs = session.walk('ifIndex')
         rslt = lmap(_get_infs, indexs)
         return ('success', rslt, ip)
@@ -141,9 +143,12 @@ def get_traffics(ip, infs):
         state = re_find(r'{inf}\scurrent\sstate\s:\s?(\w+\s?\w+)'
                         .format(inf=inf), rslt).lower()
         bw = int(re_find(r'Speed\s+:\s+(\d+),', rslt))
-        inTraffic = int(re_find(r'300 seconds input rate (\d+)\sbits/sec', rslt)) / 1000000
-        outTraffic = int(re_find(r'300 seconds output rate (\d+)\sbits/sec', rslt)) / 1000000
-        infDict = dict(name=inf, state=state, bw=bw, inTraffic=inTraffic, outTraffic=outTraffic)
+        inTraffic = int(
+            re_find(r'300 seconds input rate (\d+)\sbits/sec', rslt)) / 1000000
+        outTraffic = int(
+            re_find(r'300 seconds output rate (\d+)\sbits/sec', rslt)) / 1000000
+        infDict = dict(name=inf, state=state, bw=bw,
+                       inTraffic=inTraffic, outTraffic=outTraffic)
         return infDict
 
     try:
@@ -170,7 +175,8 @@ def get_vlans(ip):
 def get_vlans_a(ip):
     try:
         child = telnet(ip)
-        rslt = do_some(child, 'disp cu | in (port trunk allow|port hybrid tagged)')
+        rslt = do_some(
+            child, 'disp cu | in (port trunk allow|port hybrid tagged)')
         close(child)
     except (pexpect.EOF, pexpect.TIMEOUT) as e:
         return ('fail', None, ip)
@@ -189,8 +195,10 @@ def get_ports(ip):
         name = re_find(r'(\S+) current state :', record)
         state = re_find(r'current state : ?(\S+ ?\S+)', record)
         desc = re_find(r'Description:(\S+ *\S+)', record)
-        inTraffic = int(re_find(r'300 seconds input rate (\d+)\sbits/sec', record) or 0) / 1000000
-        outTraffic = int(re_find(r'300 seconds output rate (\d+)\sbits/sec', record) or 0) / 1000000
+        inTraffic = int(
+            re_find(r'300 seconds input rate (\d+)\sbits/sec', record) or 0) / 1000000
+        outTraffic = int(
+            re_find(r'300 seconds output rate (\d+)\sbits/sec', record) or 0) / 1000000
         return dict(name=name, desc=desc, state=state, inTraffic=inTraffic, outTraffic=outTraffic)
 
     try:
@@ -212,7 +220,8 @@ def get_main_card(ip):
         close(child)
     except (pexpect.EOF, pexpect.TIMEOUT) as e:
         return ('fail', None, ip)
-    temp = re_all(r'(?:SRU|MCU)[A-Z]\s+Present\s+PowerOn\s+Registered\s+Normal\s+(?:Master|Slave)', rslt)
+    temp = re_all(
+        r'(?:SRU|MCU)[A-Z]\s+Present\s+PowerOn\s+Registered\s+Normal\s+(?:Master|Slave)', rslt)
     return ('success', len(temp), ip)
 
 
@@ -225,3 +234,25 @@ def get_power_info(ip):
         return ('fail', None, ip)
     temp = re_all(r'PWR\d\s+YES\s+DC\s+Supply', rslt)
     return ('success', len(temp), ip)
+
+
+def no_shut(ip, inf):
+    try:
+        child = telnet(ip)
+        do_some(child, 'interface {inf}'.format(inf=inf))
+        do_some(child, 'undo shutdown')
+        close(child)
+    except (pexpect.EOF, pexpect.TIMEOUT) as e:
+        return ('fail', ip)
+    return ('success', ip)
+
+
+def get_inf(ip, inf):
+    try:
+        child = telnet(ip)
+        rslt = do_some(child, 'display interface {inf}'.format(inf=inf))
+        close(child)
+    except (pexpect.EOF, pexpect.TIMEOUT) as e:
+        return ('fail', None, ip)
+    state = re_find(r'current state : (\w+\s?\w+)', rslt)
+    return ('success', state, ip)
