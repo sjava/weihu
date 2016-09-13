@@ -134,7 +134,8 @@ def get_infs_bySnmp(ip):
                     inCount=inCount, outCount=outCount, collTime=collTime)
 
     try:
-        session = easysnmp.Session(hostname=ip, community=community_read, version=1)
+        session = easysnmp.Session(
+            hostname=ip, community=community_read, version=1)
         indexs = session.walk('ifIndex')
         rslt = lmap(_get_infs, indexs)
         return ('success', rslt, ip)
@@ -148,9 +149,12 @@ def get_traffics(ip, infs):
         state = re_find(r'{inf}\sis\s(\w+\s?\w+)'.format(inf=inf),
                         rslt).lower()
         bw = int(re_find(r'BW\s(\d+)\sKbits', rslt)) / 1000
-        inTraffic = int(re_find(r'120 seconds input.*:\s+(\d+)\sBps', rslt)) * 8 / 1000000
-        outTraffic = int(re_find(r'120 seconds output.*:\s+(\d+)\sBps', rslt)) * 8 / 1000000
-        infDict = dict(name=inf, state=state, bw=bw, inTraffic=inTraffic, outTraffic=outTraffic)
+        inTraffic = int(
+            re_find(r'120 seconds input.*:\s+(\d+)\sBps', rslt)) * 8 / 1000000
+        outTraffic = int(
+            re_find(r'120 seconds output.*:\s+(\d+)\sBps', rslt)) * 8 / 1000000
+        infDict = dict(name=inf, state=state, bw=bw,
+                       inTraffic=inTraffic, outTraffic=outTraffic)
         return infDict
 
     try:
@@ -186,8 +190,10 @@ def get_ports(ip):
         name = re_find(r'^((?:xg|g|f)ei\S+) is \w+ ?\w+,', record)
         state = re_find(r'^(?:xg|g|f)ei\S+ is (\w+ ?\w+),', record)
         desc = re_find(r'Description is (\S+ *\S+)', record)
-        inTraffic = int(re_find(r'120 seconds input.*:\s+(\d+)\sBps', record) or 0) * 8 / 1000000
-        outTraffic = int(re_find(r'120 seconds output.*:\s+(\d+)\sBps', record) or 0) * 8 / 1000000
+        inTraffic = int(
+            re_find(r'120 seconds input.*:\s+(\d+)\sBps', record) or 0) * 8 / 1000000
+        outTraffic = int(
+            re_find(r'120 seconds output.*:\s+(\d+)\sBps', record) or 0) * 8 / 1000000
         return dict(name=name, desc=desc, state=state, inTraffic=inTraffic, outTraffic=outTraffic)
 
     try:
@@ -223,3 +229,26 @@ def get_power_info(ip):
         return ('fail', None, ip)
     temp = re_all(r'Power\d\s+:\sWork', rslt)
     return ('success', len(temp), ip)
+
+
+def no_shut(ip, inf):
+    try:
+        child = telnet(ip)
+        do_some(child, 'conf t')
+        do_some(child, 'interface {inf}'.format(inf=inf))
+        do_some(child, 'no shutdown')
+        close(child)
+    except (pexpect.EOF, pexpect.TIMEOUT):
+        return ('fail', ip)
+    return ('success', ip)
+
+
+def get_inf(ip, inf):
+    try:
+        child = telnet(ip)
+        rslt = do_some(child, 'show interface {inf}'.format(inf=inf))
+        close(child)
+    except (pexpect.EOF, pexpect.TIMEOUT):
+        return ('fail', None, ip)
+    state = re_find(r'is (\w+\s?\w+)', rslt)
+    return ('success', state, ip)

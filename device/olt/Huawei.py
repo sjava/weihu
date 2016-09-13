@@ -61,16 +61,19 @@ def close(child):
 
 def get_groups(ip):
     def _get_group(child, group):
-        rslt = do_some(child, 'disp link-aggregation {group}'.format(group=group))
+        rslt = do_some(
+            child, 'disp link-aggregation {group}'.format(group=group))
         desc = re_find(r'description:(\S+)', rslt)
         mode = re_find(r'work mode:\s+(\S+)', rslt)
         temp = re_all(r'(\d+/\d+)\s+(\d\S+)', rslt)
-        temp1 = lmapcat(lambda x: ['{0}/{1}'.format(x[0], y) for y in x[1].split(',')], temp)
+        temp1 = lmapcat(lambda x: ['{0}/{1}'.format(x[0], y)
+                                   for y in x[1].split(',')], temp)
         return dict(name=group, desc=desc, mode=mode, infs=temp1)
 
     try:
         child = telnet(ip)
-        temp = re_all(r'(\d+/\d+/\d+)', do_some(child, 'disp link-aggregation all'))
+        temp = re_all(r'(\d+/\d+/\d+)', do_some(child,
+                                                'disp link-aggregation all'))
         groups = lmap(partial(_get_group, child), temp)
         close(child)
     except (pexpect.EOF, pexpect.TIMEOUT) as e:
@@ -89,7 +92,8 @@ def get_infs(ip):
             boardName = 'giu'
         child.sendline('conf')
         child.expect(prompter)
-        child.sendline('interface {boardName} 0/{slot}'.format(boardName=boardName, slot=slot))
+        child.sendline(
+            'interface {boardName} 0/{slot}'.format(boardName=boardName, slot=slot))
         child.expect(prompter)
         temp = []
         for x, y in rslt:
@@ -148,3 +152,38 @@ def get_power_info(ip):
     if rslt is None:
         rslt = "alarm"
     return ('success', rslt.lower(), ip)
+
+
+def no_shut(ip, inf):
+    try:
+        child = telnet(ip)
+        slot, port = inf.rsplit('/', 1)
+        rslt = do_some(child, 'display board {slot}'.format(slot=slot))
+        name = re_find(r'Board Name\s+:\s\w+(ETH)\w+', rslt) or 'giu'
+        do_some(child, 'conf')
+        do_some(child, 'interface {name} {slot}'.format(name=name, slot=slot))
+        do_some(child, 'undo shutdown {port}'.format(port=port))
+        do_some(child, 'quit')
+        do_some(child, 'quit')
+        close(child)
+    except (pexpect.EOF, pexpect.TIMEOUT):
+        return ('fail', ip)
+    return ('success', ip)
+
+
+def get_inf(ip, inf):
+    try:
+        child = telnet(ip)
+        slot, port = inf.rsplit('/', 1)
+        rslt = do_some(child, 'display board {slot}'.format(slot=slot))
+        name = re_find(r'Board Name\s+:\s\w+(ETH)\w+', rslt) or 'giu'
+        do_some(child, 'conf')
+        do_some(child, 'interface {name} {slot}'.format(name=name, slot=slot))
+        info = do_some(child, 'disp port state {port}'.format(port=port))
+        do_some(child, 'quit')
+        do_some(child, 'quit')
+        close(child)
+    except (pexpect.EOF, pexpect.TIMEOUT):
+        return ('fail', None, ip)
+    state = 'up' if re_find(r'port is online', info) else 'down'
+    return ('success', state, ip)

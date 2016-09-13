@@ -99,7 +99,8 @@ def get_groups(ip):
         rslt = do_some(child, 'show run int {name}'.format(name=group['name']))
         desc = re_find(r'description\s+(\S+)', rslt)
         group['desc'] = desc
-        rslt = do_some(child, 'show run int {inf}'.format(inf=group['infs'][0]))
+        rslt = do_some(child, 'show run int {inf}'.format(
+            inf=group['infs'][0]))
         mode = re_find(r'smartgroup\s\d+\smode\s(\S+)', rslt)
         group['mode'] = mode
         return group
@@ -147,7 +148,8 @@ def get_main_card(ip):
         child = telnet(ip)
         rslt = do_some(child, 'show card')
         close(child)
-        cards = re_all(r'\d\s+\d\s+\d{1,2}\s+(SCXM|GCSA).*(?:INSERVICE|STANDBY)', rslt)
+        cards = re_all(
+            r'\d\s+\d\s+\d{1,2}\s+(SCXM|GCSA).*(?:INSERVICE|STANDBY)', rslt)
     except (pexpect.EOF, pexpect.TIMEOUT) as e:
         return('fail', None, ip)
     return ('success', len(cards), ip)
@@ -166,3 +168,26 @@ def get_power_info(ip):
     else:
         rslt = 'normal'
     return ('success', rslt, ip)
+
+
+def no_shut(ip, inf):
+    try:
+        child = telnet(ip)
+        do_some(child, 'conf t')
+        do_some(child, 'interface {inf}'.format(inf=inf))
+        do_some(child, 'no shutdown')
+        close(child)
+    except (pexpect.EOF, pexpect.TIMEOUT):
+        return ('fail', ip)
+    return ('success', ip)
+
+
+def get_inf(ip, inf):
+    try:
+        child = telnet(ip)
+        rslt = do_some(child, 'show interface {inf}'.format(inf=inf))
+        close(child)
+    except (pexpect.EOF, pexpect.TIMEOUT):
+        return ('fail', None, ip)
+    state = re_find(r'is (\w+\s?\w+)', rslt)
+    return ('success', state, ip)
