@@ -4,6 +4,7 @@ import pexpect
 import configparser
 import sys
 import os
+import re
 from funcy import re_find, select, map, compose, partial, lmapcat
 from funcy import lmap, re_all, join_with, identity, count_by
 
@@ -18,8 +19,7 @@ password = conf.get('bras', 'password')
 
 
 def telnet(ip):
-    child = pexpect.spawn('telnet {ip}'.format(ip=ip),
-                          encoding='ISO-8859-1')
+    child = pexpect.spawn('telnet {ip}'.format(ip=ip), encoding='ISO-8859-1')
     child.logfile = logfile
     child.expect('Username:')
     child.sendline(username)
@@ -54,20 +54,17 @@ def do_some(child, cmd):
 
 def get_bingfa(ip):
     def _get_users(child, slot):
-        record = do_some(
-            child, 'disp max-online slot {s}'.format(s=slot))
-        users = re_find(
-            r'Max online users since startup\s+:\s+(\d+)', record)
+        record = do_some(child, 'disp max-online slot {s}'.format(s=slot))
+        users = re_find(r'Max online users since startup\s+:\s+(\d+)', record)
         users = int(users or 0)
-        date = re_find(
-            r'Time of max online users\s+:\s+(\d{4}-\d{2}-\d{2})', record)
+        date = re_find(r'Time of max online users\s+:\s+(\d{4}-\d{2}-\d{2})',
+                       record)
         return (slot, users, date)
 
     try:
         child = telnet(ip)
         rslt = do_some(child, 'disp dev | in BSU')
-        ff = compose(partial(select, bool),
-                     partial(map, r'(\d+)\s+BSU'))
+        ff = compose(partial(select, bool), partial(map, r'(\d+)\s+BSU'))
         slots = ff(rslt.split('\r\n'))
         maxUsers = lmap(partial(_get_users, child), slots)
         close(child)
@@ -78,13 +75,15 @@ def get_bingfa(ip):
 
 def get_vlan_users(ip, inf):
     def _get_users(child, i):
-        rslt = do_some(child, 'disp access-user interface {i} | in /'.format(i=i))
+        rslt = do_some(
+            child, 'disp access-user interface {i} | in /'.format(i=i))
         users = re_all(r'(\d+)/', rslt)
         return users
 
     try:
         child = telnet(ip)
-        infs = do_some(child, 'disp cu interface | in Eth-Trunk{inf}\.'.format(inf=inf))
+        infs = do_some(
+            child, 'disp cu interface | in Eth-Trunk{inf}\.'.format(inf=inf))
         infs = re_all(r'interface (\S+)', infs)
         rslt = lmapcat(partial(_get_users, child), infs)
         close(child)
@@ -96,15 +95,34 @@ def get_vlan_users(ip, inf):
 
 def get_ip_pool(ip):
     def _get_sections(child, name):
-        rslt = do_some(child, 'disp cu configuration ip-pool {name}'.format(name=name))
+        rslt = do_some(
+            child, 'disp cu configuration ip-pool {name}'.format(name=name))
         sections = re_all(r'section \d+ (\S+) (\S+)', rslt)
         return sections
+
     try:
         child = telnet(ip)
         rslt = do_some(child, 'disp domain 163.js | in pool-name')
         poolNames = re_all(r'pool-name\s+:\s(\S+)', rslt)
         ips = lmapcat(partial(_get_sections, child), poolNames)
         close(child)
-    except(pexpect.EOF, pexpect.TIMEOUT) as e:
+    except (pexpect.EOF, pexpect.TIMEOUT) as e:
         return ('fail', None, ip)
     return ('success', ips, ip)
+
+
+def get_itv_online(ip):
+    try:
+        child = telnet(ip)
+        rslt = do_some(child,
+                       'disp access-user online-total-number domain vod')
+        count = re_find(r'total users\s+:\s+(\d+)', rslt, flags=re.I)
+        count = int(count) if count else 0
+        rslt = do_some(child,
+                       'disp access-user online-total-number domain itv')
+        count1 = re_find(r'total users\s+:\s+(\d+)', rslt, flags=re.I)
+        count1 = int(count1) if count1 else 0
+        close(child)
+    except (pexpect.EOF, pexpect.TIMEOUT):
+        return ('fail', None, ip)
+    return ('success', count + count1, ip)

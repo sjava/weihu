@@ -164,6 +164,16 @@ def add_main_card():
     pool.join()
 
 
+def get_hw_epba():
+    nodes = graph.cypher.execute(
+        'match (n:Olt) where n.company="hw" return n.ip as ip')
+    with open('epba.txt', 'w') as fh:
+        for olt in nodes:
+            _, slots, ip = Huawei.get_epba_card(olt['ip'])
+            if slots:
+                fh.write('{ip}:{slots}\n'.format(ip=ip, slots=','.join(slots)))
+
+
 def _add_power_info(lock, record):
     mark, rslt, ip = record
     stmt = """
@@ -197,14 +207,33 @@ def add_power_info():
     pool.join()
 
 
+def del_old_data():
+    cmd1 = """
+    match (:Olt)-->(i:Inf)
+    detach delete i
+    """
+    cmd2 = """
+    match (:Olt)-->(g:Group)
+    detach delete g
+    """
+    cmd3 = """
+    match (:Olt)-->(:Group)-[r]->(:Inf)
+    detach delete r
+    """
+    graph.cypher.execute(cmd1)
+    graph.cypher.execute(cmd3)
+    graph.cypher.execute(cmd2)
+
+
 def main():
-    pass
-    # start = time.time()
+    # pass
+    start = time.time()
     #  add_infs()
     #  add_groups()
     #  add_main_card()
     # add_power_info()
-    # print(time.time() - start)
+    get_hw_epba()
+    print(time.time() - start)
     # import_olt()
 
 if __name__ == '__main__':

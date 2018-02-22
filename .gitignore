@@ -1,0 +1,11 @@
+*.py[cod]
+*.so
+*.egg
+*.egg-info
+*.swp
+*.log
+*.txt
+*.csv
+*.*~
+*.ini
+*.bak

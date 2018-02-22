@@ -76,7 +76,7 @@ def get_groups(ip):
                                                 'disp link-aggregation all'))
         groups = lmap(partial(_get_group, child), temp)
         close(child)
-    except (pexpect.EOF, pexpect.TIMEOUT) as e:
+    except (pexpect.EOF, pexpect.TIMEOUT):
         return ('fail', None, ip)
     return ('success', groups, ip)
 
@@ -117,7 +117,7 @@ def get_infs(ip):
         boards = re_all(r'(\d+)\s+\w+(eth|gic)\w+\s+normal', rslt, flags=re.I)
         infs = lmapcat(partial(_get_inf, child), boards)
         close(child)
-    except (pexpect.EOF, pexpect.TIMEOUT) as e:
+    except (pexpect.EOF, pexpect.TIMEOUT):
         return ('fail', None, ip)
     return ('success', infs, ip)
 
@@ -127,10 +127,21 @@ def get_main_card(ip):
         child = telnet(ip)
         rslt = do_some(child, 'display board 0')
         close(child)
-    except (pexpect.EOF, pexpect.TIMEOUT) as e:
+    except (pexpect.EOF, pexpect.TIMEOUT):
         return ('fail', None, ip)
     cards = re_all(r'(SCUL|SCUN)\s+(?:Standby_normal|Active_normal)', rslt)
     return ('success', len(cards), ip)
+
+
+def get_epba_card(ip):
+    try:
+        child = telnet(ip)
+        rslt = do_some(child, 'display board 0')
+        close(child)
+    except (pexpect.EOF, pexpect.TIMEOUT):
+        return ('fail', None, ip)
+    cards = re_all(r'(\d{1,2})\s+\w+EPBA\s+Normal', rslt)
+    return ('success', cards, ip)
 
 
 def get_power_info(ip):
@@ -146,7 +157,7 @@ def get_power_info(ip):
         child.sendline('quit')
         child.expect(prompter)
         close(child)
-    except (pexpect.EOF, pexpect.TIMEOUT) as e:
+    except (pexpect.EOF, pexpect.TIMEOUT):
         return ('fail', None, ip)
     rslt = re_find(r'Power fault\s+(\w+)', temp)
     if rslt is None:

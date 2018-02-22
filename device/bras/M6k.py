@@ -20,8 +20,7 @@ super_pass = conf.get('bras', 'm6k_super')
 
 
 def telnet(ip):
-    child = pexpect.spawn('telnet {ip}'.format(ip=ip),
-                          encoding='ISO-8859-1')
+    child = pexpect.spawn('telnet {ip}'.format(ip=ip), encoding='ISO-8859-1')
     child.logfile = logfile
     child.expect('Username:')
     child.sendline(username)
@@ -64,8 +63,11 @@ def get_bingfa(ip):
     except (pexpect.EOF, pexpect.TIMEOUT) as e:
         return ('fail', None, ip)
     rslt1 = [x for x in re.split(r'\r\n-+\r\n', rslt) if 'Slot:' in x]
-    rslt2 = [re_find(
-        r'Slot:(\d+).*Total\s+(\d+)\s+(\d{4}/\d{2}/\d{2})', x, flags=re.S) for x in rslt1]
+    rslt2 = [
+        re_find(
+            r'Slot:(\d+).*Total\s+(\d+)\s+(\d{4}/\d{2}/\d{2})', x, flags=re.S)
+        for x in rslt1
+    ]
     rslt3 = select(bool, rslt2)
     rslt3 = [(x[0], int(x[1]), x[2]) for x in rslt3]
     return ('success', rslt3, ip)
@@ -73,13 +75,17 @@ def get_bingfa(ip):
 
 def get_vlan_users(ip, inf):
     def _get_users(child, i):
-        rslt = do_some(child, 'show subscriber interface {i} | in external-vlan'.format(i=i))
+        rslt = do_some(
+            child,
+            'show subscriber interface {i} | in external-vlan'.format(i=i))
         vlans = re_all(r'external-vlan\s+:(\d+)', rslt)
         return vlans
 
     try:
         child = telnet(ip)
-        rslt = do_some(child, 'show running-config | in smartgroup{inf}\.'.format(inf=inf))
+        rslt = do_some(
+            child,
+            'show running-config | in smartgroup{inf}\.'.format(inf=inf))
         infs = distinct(re_all(r'(smartgroup\S+)', rslt))
         vlans = lmapcat(partial(_get_users, child), infs)
         close(child)
@@ -87,3 +93,18 @@ def get_vlan_users(ip, inf):
     except (pexpect.EOF, pexpect.TIMEOUT) as e:
         return ('fail', None, ip)
     return ('success', vlans, ip)
+
+
+def get_itv_online(ip):
+    try:
+        child = telnet(ip)
+        rslt = do_some(child, 'show subscriber statistics domain vod')
+        count = re_find(r'all-stack\s*:\s+(\d+)', rslt, flags=re.I)
+        count = int(count) if count else 0
+        rslt = do_some(child, 'show subscriber statistics domain itv')
+        count1 = re_find(r'all-stack\s*:\s+(\d+)', rslt, flags=re.I)
+        count1 = int(count1) if count1 else 0
+        close(child)
+    except (pexpect.EOF, pexpect.TIMEOUT):
+        return ('fail', None, ip)
+    return ('success', count + count1, ip)

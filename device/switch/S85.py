@@ -186,7 +186,7 @@ def get_inf(ip, inf):
         close(child)
     except (pexpect.EOF, pexpect.TIMEOUT) as e:
         return ('fail', None, ip)
-    state = re_find(r'current state :(\w+\s?\w+)', rslt)
+    state = re_find(r'current state :\s?(\w+\s?\w+)', rslt)
     return ('success', state, ip)
 
 
