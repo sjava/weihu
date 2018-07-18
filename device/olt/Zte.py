@@ -6,10 +6,10 @@ import os
 import configparser
 import re
 from funcy import re_all, partial, lmap, re_find
-from funcy import select, distinct, filter
+from funcy import select, distinct, filter, re_test, lmapcat
 from toolz import thread_last
 
-prompter = "#"
+prompter = "#$"
 pager = "--More--"
 logfile = sys.stdout
 
@@ -34,7 +34,7 @@ def telnet(ip):
 def do_some(child, cmd, timeout=120):
     result = []
     child.sendline(cmd)
-    while True:
+    while 1:
         index = child.expect([prompter, pager], timeout=timeout)
         result.append(child.before)
         if index == 0:
@@ -51,6 +51,25 @@ def close(child):
     child.expect(prompter)
     child.sendline('exit')
     child.close()
+
+
+def get_svlan(ip):
+    def _format(port):
+        temp = re_find(r'_(\d+)/(\d+)/(\d+)', port)
+        temp = map(lambda x: x if len(x) > 1 else '0' + x, temp)
+        return '/'.join(temp)
+
+    try:
+        child = telnet(ip)
+        rslt1 = do_some(child, 'show vlan-smart-qinq')
+        close(child)
+    except (pexpect.EOF, pexpect.TIMEOUT):
+        return [(ip, 'ZTE', 'fail')]
+    rslt1 = re.split(r'\r\n\s*', rslt1)
+    rslt1 = (re.split(r'\s+', x) for x in rslt1 if x.startswith('epon'))
+    rslt1 = [[ip, _format(x[0]), x[5]] for x in rslt1
+             if 51 <= int(x[1]) <= 1999]
+    return rslt1
 
 
 def get_pon_ports(ip):
@@ -99,8 +118,8 @@ def get_groups(ip):
         rslt = do_some(child, 'show run int {name}'.format(name=group['name']))
         desc = re_find(r'description\s+(\S+)', rslt)
         group['desc'] = desc
-        rslt = do_some(child, 'show run int {inf}'.format(
-            inf=group['infs'][0]))
+        rslt = do_some(
+            child, 'show run int {inf}'.format(inf=group['infs'][0]))
         mode = re_find(r'smartgroup\s\d+\smode\s(\S+)', rslt)
         group['mode'] = mode
         return group
@@ -108,8 +127,7 @@ def get_groups(ip):
     try:
         child = telnet(ip)
         rslt = re.split(r'\r\n\s*\r\n', do_some(child, 'show lacp internal'))
-        groups = thread_last(rslt,
-                             (lmap, _get_infs),
+        groups = thread_last(rslt, (lmap, _get_infs),
                              (select, lambda x: x['name'] and x['infs']))
         lmap(partial(_get_desc_mode, child), groups)
         close(child)
@@ -129,8 +147,13 @@ def get_infs(ip):
         inTraffic = int(inTraffic or 0) * 8 / 1e6
         outTraffic = re_find(r'seconds\soutput\srate:\s+(\d+)\sBps', rslt)
         outTraffic = int(outTraffic or 0) * 8 / 1e6
-        return dict(name=inf, desc=desc, state=state, bw=bw,
-                    inTraffic=inTraffic, outTraffic=outTraffic)
+        return dict(
+            name=inf,
+            desc=desc,
+            state=state,
+            bw=bw,
+            inTraffic=inTraffic,
+            outTraffic=outTraffic)
 
     try:
         child = telnet(ip)
@@ -151,7 +174,7 @@ def get_main_card(ip):
         cards = re_all(
             r'\d\s+\d\s+\d{1,2}\s+(SCXM|GCSA).*(?:INSERVICE|STANDBY)', rslt)
     except (pexpect.EOF, pexpect.TIMEOUT) as e:
-        return('fail', None, ip)
+        return ('fail', None, ip)
     return ('success', len(cards), ip)
 
 
@@ -191,3 +214,27 @@ def get_inf(ip, inf):
         return ('fail', None, ip)
     state = re_find(r'is (\w+\s?\w+)', rslt)
     return ('success', state, ip)
+
+
+def get_active_port(ip):
+    def _get_active_port(child, inf):
+        info = do_some(child, 'show {0}'.format(inf))
+        if re_test(r'line\sprotocol\sis\sup', info):
+            return inf
+        else:
+            return ''
+
+    try:
+        child = telnet(ip)
+        rslt = do_some(child, 'show run | include interface', timeout=300)
+
+        infs = [
+            _get_active_port(child, inf) for inf in rslt.split('\r\n')
+            if re_test(r'interface (xg|g)ei(?i)', inf)
+        ]
+        close(child)
+    except Exception:
+        return [[ip, 'ZTE', 'failed']]
+    infs = [x.split()[1] for x in infs if x]
+    infs = [[ip, 'successed', x] for x in infs]
+    return infs

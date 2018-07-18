@@ -3,12 +3,13 @@
 import configparser
 import pexpect
 import os
+import csv
 import multiprocessing
 from multiprocess import Pool, Manager
 from py2neo import Graph, Node
 from py2neo import authenticate
 from toolz import thread_last
-from funcy import partial, compose, lmap, re_all, re_test
+from funcy import partial, compose, lmap, re_all, re_test, cat
 from device.olt import Zte, Huawei
 import time
 
@@ -16,7 +17,6 @@ config = configparser.ConfigParser()
 config.read(os.path.expanduser('~/.weihu/config.ini'))
 neo4j_username = config.get('neo4j', 'username')
 neo4j_password = config.get('neo4j', 'password')
-
 
 olts_file, log_file, result_file = ('olts.txt', 'result/olt_log.txt',
                                     'result/olt_info.txt')
@@ -35,8 +35,8 @@ def import_olt():
         for x in folt:
             hostname, ip, company, area = x.strip().split(',')
             print('{0}:{1}:{2}:{3}'.format(hostname, ip, company, area))
-            tx.append(cmd, hostname=hostname, ip=ip,
-                      company=company, area=area)
+            tx.append(
+                cmd, hostname=hostname, ip=ip, company=company, area=area)
     tx.process()
     tx.commit()
 
@@ -49,7 +49,9 @@ def clear_log():
 
 
 def _company(funcs, device):
-    def unknow_company(**kw): return ('fail', None, kw['ip'])
+    def unknow_company(**kw):
+        return ('fail', None, kw['ip'])
+
     company = device.pop('company')
     return funcs.get(company, unknow_company)(**device)
 
@@ -106,8 +108,12 @@ def _add_groups(lock, record):
         if mark == 'success' and groups:
             tx = graph.cypher.begin()
             for x in groups:
-                tx.append(stmt1, ip=ip, name=x['name'], desc=x[
-                          'desc'], mode=x['mode'])
+                tx.append(
+                    stmt1,
+                    ip=ip,
+                    name=x['name'],
+                    desc=x['desc'],
+                    mode=x['mode'])
                 for infName in x['infs']:
                     tx.append(stmt2, infName=infName, ip=ip, name=x['name'])
             tx.process()
@@ -121,8 +127,7 @@ def add_groups():
     clear_log()
     nodes = graph.cypher.execute(
         'match (n: Olt) return n.ip as ip, n.company as company')
-    olts = [dict(ip=x['ip'], company=x['company'])
-            for x in nodes]
+    olts = [dict(ip=x['ip'], company=x['company']) for x in nodes]
     pool = Pool(128)
     lock = Manager().Lock()
     _add_groups_p = partial(_add_groups, lock)
@@ -154,8 +159,7 @@ def add_main_card():
 
     nodes = graph.cypher.execute(
         'match (n: Olt) return n.ip as ip, n.company as company')
-    olts = [dict(ip=x['ip'], company=x['company'])
-            for x in nodes]
+    olts = [dict(ip=x['ip'], company=x['company']) for x in nodes]
     pool = Pool(128)
     lock = Manager().Lock()
     _add_main_card_p = partial(_add_main_card, lock)
@@ -197,8 +201,7 @@ def add_power_info():
 
     nodes = graph.cypher.execute(
         'match (n: Olt) return n.ip as ip, n.company as company')
-    olts = [dict(ip=x['ip'], company=x['company'])
-            for x in nodes]
+    olts = [dict(ip=x['ip'], company=x['company']) for x in nodes]
     pool = Pool(128)
     lock = Manager().Lock()
     _add_power_info_p = partial(_add_power_info, lock)
@@ -225,6 +228,38 @@ def del_old_data():
     graph.cypher.execute(cmd2)
 
 
+def get_svlan():
+    devices = dict(ZTE=Zte, HW=Huawei)
+    action = 'get_svlan'
+    reader = csv.reader(open('deviceList.csv'))
+    next(reader)
+    olts = (line[:2] for line in reader)
+    funcs = map(lambda x: partial(getattr(devices.get(x[1]), action), x[0]),
+                olts)
+    with Pool(32) as p:
+        rslt = p.map(lambda f: f(), funcs)
+    rslt = cat(rslt)
+    with open('svlan.csv', 'w') as fb:
+        writer = csv.writer(fb)
+        writer.writerows(rslt)
+
+
+def get_active_port():
+    devices = dict(ZTE=Zte, HW=Huawei)
+    action = 'get_active_port'
+    reader = csv.reader(open('deviceList.csv'))
+    next(reader)
+    olts = (line[:2] for line in reader)
+    funcs = map(lambda x: partial(getattr(devices.get(x[1]), action), x[0]),
+                olts)
+    with Pool(64) as p:
+        rslt = p.map(lambda f: f(), funcs)
+    rslt = cat(rslt)
+    with open('up_port.csv', 'w') as fb:
+        writer = csv.writer(fb)
+        writer.writerows(rslt)
+
+
 def main():
     # pass
     start = time.time()
@@ -235,6 +270,7 @@ def main():
     get_hw_epba()
     print(time.time() - start)
     # import_olt()
+
 
 if __name__ == '__main__':
     main()
