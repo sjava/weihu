@@ -8,8 +8,9 @@ import re
 import time
 import easysnmp
 from functools import reduce
-from funcy import lmap, map, re_find, re_all
+from funcy import lmap, map, re_find, re_all, rcompose
 from funcy import select, partial, re_test, lconcat
+from operator import methodcaller
 
 pager = "---- More ----"
 prompter = "]"
@@ -24,8 +25,7 @@ community_read = config.get('switch', 'community')
 
 
 def telnet(ip):
-    child = pexpect.spawn(
-        'telnet {0}'.format(ip), encoding='ISO-8859-1')
+    child = pexpect.spawn('telnet {0}'.format(ip), encoding='ISO-8859-1')
     child.logfile = logfile
     child.expect('Username:')
     child.sendline(username)
@@ -62,7 +62,7 @@ def do_some(child, command):
         else:
             child.send(" ")
             continue
-    rslt = ''.join(result).replace('\x1b[42D', '')
+    rslt = ''.join(result).replace('\x1b[42D', '').replace(' \x1b[1D', '')
     return rslt.replace(command + '\r\n', '', 1)
 
 
@@ -91,8 +91,8 @@ def get_groups(ip):
 
 def get_infs(ip):
     def _get_info(record):
-        name = re_find(r'interface\s(x?gigabitethernet\S+)',
-                       record, flags=re.I)
+        name = re_find(
+            r'interface\s(x?gigabitethernet\S+)', record, flags=re.I)
         desc = re_find(r'description\s(\S+ *\S*)', record)
         group = re_find(r'(eth-trunk\s\d+)', record)
         return dict(name=name, desc=desc, group=group)
@@ -124,8 +124,14 @@ def get_infs_bySnmp(ip):
         inCount = int(session.get(('ifInOctets', index)).value or 0)
         outCount = int(session.get(('ifOutOctets', index)).value or 0)
         collTime = time.time()
-        return dict(name=name, desc=desc, state=state, bw=bw,
-                    inCount=inCount, outCount=outCount, collTime=collTime)
+        return dict(
+            name=name,
+            desc=desc,
+            state=state,
+            bw=bw,
+            inCount=inCount,
+            outCount=outCount,
+            collTime=collTime)
 
     try:
         session = easysnmp.Session(
@@ -140,15 +146,21 @@ def get_infs_bySnmp(ip):
 def get_traffics(ip, infs):
     def _get_traffic(child, inf):
         rslt = do_some(child, 'disp int {inf}'.format(inf=inf))
-        state = re_find(r'{inf}\scurrent\sstate\s:\s?(\w+\s?\w+)'
-                        .format(inf=inf), rslt).lower()
+        state = re_find(
+            r'{inf}\scurrent\sstate\s:\s?(\w+\s?\w+)'.format(inf=inf),
+            rslt).lower()
         bw = int(re_find(r'Speed\s+:\s+(\d+),', rslt))
         inTraffic = int(
             re_find(r'300 seconds input rate (\d+)\sbits/sec', rslt)) / 1000000
         outTraffic = int(
-            re_find(r'300 seconds output rate (\d+)\sbits/sec', rslt)) / 1000000
-        infDict = dict(name=inf, state=state, bw=bw,
-                       inTraffic=inTraffic, outTraffic=outTraffic)
+            re_find(r'300 seconds output rate (\d+)\sbits/sec',
+                    rslt)) / 1000000
+        infDict = dict(
+            name=inf,
+            state=state,
+            bw=bw,
+            inTraffic=inTraffic,
+            outTraffic=outTraffic)
         return infDict
 
     try:
@@ -175,8 +187,8 @@ def get_vlans(ip):
 def get_vlans_a(ip):
     try:
         child = telnet(ip)
-        rslt = do_some(
-            child, 'disp cu | in (port trunk allow|port hybrid tagged)')
+        rslt = do_some(child,
+                       'disp cu | in (port trunk allow|port hybrid tagged)')
         close(child)
     except (pexpect.EOF, pexpect.TIMEOUT) as e:
         return ('fail', None, ip)
@@ -190,16 +202,43 @@ def get_vlans_a(ip):
     return ('success', list(vlans), ip)
 
 
+def get_vlans_of_port(ip, port):
+    try:
+        child = telnet(ip)
+        rslt = do_some(child, f'disp cu interface {port}')
+        eth_trunk = re_find(r'eth-trunk \d+', rslt, re.I)
+        rslt = do_some(child, f'disp cu interface {eth_trunk}')
+        close(child)
+    except Exception as e:
+        raise e
+    test = rcompose(methodcaller('splitlines'), lambda x: map(x))
+    rslt = rslt.splitlines()
+    rslt = [x.strip() for x in rslt]
+    rslt = [
+        x for x in rslt
+        if re_test(r'^(port trunk allow|port hybrid tagged)', x, re.I)
+    ]
+    import pprint
+    pprint.pprint(rslt)
+
+
 def get_ports(ip):
     def _get_info(record):
         name = re_find(r'(\S+) current state :', record)
         state = re_find(r'current state : ?(\S+ ?\S+)', record)
         desc = re_find(r'Description:(\S+ *\S+)', record)
         inTraffic = int(
-            re_find(r'300 seconds input rate (\d+)\sbits/sec', record) or 0) / 1000000
+            re_find(r'300 seconds input rate (\d+)\sbits/sec', record)
+            or 0) / 1000000
         outTraffic = int(
-            re_find(r'300 seconds output rate (\d+)\sbits/sec', record) or 0) / 1000000
-        return dict(name=name, desc=desc, state=state, inTraffic=inTraffic, outTraffic=outTraffic)
+            re_find(r'300 seconds output rate (\d+)\sbits/sec', record)
+            or 0) / 1000000
+        return dict(
+            name=name,
+            desc=desc,
+            state=state,
+            inTraffic=inTraffic,
+            outTraffic=outTraffic)
 
     try:
         child = telnet(ip)
@@ -221,7 +260,8 @@ def get_main_card(ip):
     except (pexpect.EOF, pexpect.TIMEOUT) as e:
         return ('fail', None, ip)
     temp = re_all(
-        r'(?:SRU|MCU)[A-Z]\s+Present\s+PowerOn\s+Registered\s+Normal\s+(?:Master|Slave)', rslt)
+        r'(?:SRU|MCU)[A-Z]\s+Present\s+PowerOn\s+Registered\s+Normal\s+(?:Master|Slave)',
+        rslt)
     return ('success', len(temp), ip)
 
 
