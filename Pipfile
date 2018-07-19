@@ -11,6 +11,8 @@ easysnmp = "*"
 
 [dev-packages]
 "flake8" = "*"
+ptpython = "*"
+yapf = "*"
 
 [requires]
 python_version = "3.6"

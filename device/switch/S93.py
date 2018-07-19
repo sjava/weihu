@@ -8,8 +8,8 @@ import re
 import time
 import easysnmp
 from functools import reduce
-from funcy import lmap, map, re_find, re_all, rcompose
-from funcy import select, partial, re_test, lconcat
+from funcy import lmap, map, re_find, re_all, rcompose, filter
+from funcy import select, partial, re_test, lconcat, autocurry
 from operator import methodcaller
 
 pager = "---- More ----"
@@ -211,13 +211,18 @@ def get_vlans_of_port(ip, port):
         close(child)
     except Exception as e:
         raise e
-    test = rcompose(methodcaller('splitlines'), lambda x: map(x))
-    rslt = rslt.splitlines()
-    rslt = [x.strip() for x in rslt]
-    rslt = [
-        x for x in rslt
-        if re_test(r'^(port trunk allow|port hybrid tagged)', x, re.I)
-    ]
+    filter_str = r'^(port trunk allow|port hybrid tagged)'
+    vlans = rcompose(
+        methodcaller('splitlines'),
+        autocurry(map)(lambda x: x.strip()),
+        autocurry(filter)(lambda x: re_test(filter_str, x)))
+    rslt = vlans(rslt)
+    # rslt = rslt.splitlines()
+    # rslt = [x.strip() for x in rslt]
+    # rslt = [
+    #     x for x in rslt
+    #     if re_test(r'^(port trunk allow|port hybrid tagged)', x, re.I)
+    # ]
     import pprint
     pprint.pprint(rslt)
 
