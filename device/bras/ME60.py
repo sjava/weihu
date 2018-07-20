@@ -6,7 +6,7 @@ import sys
 import os
 import re
 from operator import methodcaller
-from funcy import re_find, select, map, compose, partial, lmapcat, filter
+from funcy import re_find, select, map, compose, partial, lmapcat, filter, re_test
 from funcy import lmap, re_all, join_with, identity, count_by, rcompose, autocurry
 
 prompter = "]"
@@ -133,12 +133,12 @@ def get_vlans_of_port(ip, port):
     try:
         child = telnet(ip)
         rslt = do_some(child, f'disp cu interface {port}')
-        eth_trunk = re_find(r'eth-trunk \d+', rslt)
+        eth_trunk = re_find(r'eth-trunk \d+', rslt).replace(' ', '')
         rslt = do_some(child, 'disp cu interface filter user-vlan')
         close(child)
     except Exception as e:
         raise e
     rslt = rcompose(
         methodcaller('split', '#'),
-        autocurry(filter)(f'{eth_trunk}'))(rslt)
+        autocurry(filter)(lambda x: re_test(eth_trunk, x, re.I)))(rslt)
     return rslt
