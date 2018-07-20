@@ -5,8 +5,9 @@ import configparser
 import sys
 import os
 import re
-from funcy import re_find, select, map, compose, partial, lmapcat
-from funcy import lmap, re_all, join_with, identity, count_by
+from operator import methodcaller
+from funcy import re_find, select, map, compose, partial, lmapcat, filter
+from funcy import lmap, re_all, join_with, identity, count_by, rcompose, autocurry
 
 prompter = "]"
 pager = "---- More ----"
@@ -133,9 +134,11 @@ def get_vlans_of_port(ip, port):
         child = telnet(ip)
         rslt = do_some(child, f'disp cu interface {port}')
         eth_trunk = re_find(r'eth-trunk \d+', rslt)
+        rslt = do_some(child, 'disp cu interface filter user-vlan')
         close(child)
     except Exception as e:
         raise e
-    print(rslt)
-    print(eth_trunk)
+    rslt = rcompose(
+        methodcaller('split', '#'),
+        autocurry(filter)(f'{eth_trunk}'))(rslt)
     return rslt
