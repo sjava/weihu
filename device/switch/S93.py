@@ -8,7 +8,7 @@ import re
 import time
 import easysnmp
 from functools import reduce
-from funcy import lmap, map, re_find, re_all, rcompose, filter
+from funcy import lmap, map, re_find, re_all, rcompose, filter, merge
 from funcy import select, partial, re_test, lconcat, autocurry
 from operator import methodcaller
 
@@ -303,5 +303,5 @@ def _to_vlans(item):
     vlan1 = reduce(lambda acc, curr: acc | set(curr), vlan_sgmt, set())
     vlans = re_all(r'\d+', re.sub(r'\d+ to \d+', '', item))
     vlans = map(lambda x: int(x), vlans)
-    vlans = reduce(lambda acc, curr: acc.add(curr), vlans, vlan1)
+    vlans = merge(vlan1, vlans)
     return vlans
