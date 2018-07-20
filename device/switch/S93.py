@@ -209,16 +209,16 @@ def get_vlans_of_port(ip, port):
         eth_trunk = re_find(r'eth-trunk \d+', rslt, re.I)
         rslt = do_some(child, f'disp cu interface {eth_trunk}')
         close(child)
-    except Exception as e:
-        raise e
+    except (pexpect.EOF, pexpect.TIMEOUT):
+        return (ip, port, 'fail')
     filter_str = r'^(port trunk allow|port hybrid tagged)'
     vlans = rcompose(
         methodcaller('splitlines'),
         autocurry(map)(lambda x: x.strip()),
-        autocurry(filter)(lambda x: re_test(filter_str, x)))(rslt)
-    rslt = reduce(lambda acc, curr: acc | _to_vlans(curr), vlans, set())
-    import pprint
-    pprint.pprint(list(rslt))
+        autocurry(filter)(lambda x: re_test(filter_str, x)),
+        autocurry(map)(lambda x: _to_vlans(x)))(rslt)
+    vlans = merge(set(), *vlans)
+    return (ip, eth_trunk, list(vlans))
 
 
 def get_ports(ip):
