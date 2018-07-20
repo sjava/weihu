@@ -215,14 +215,8 @@ def get_vlans_of_port(ip, port):
     vlans = rcompose(
         methodcaller('splitlines'),
         autocurry(map)(lambda x: x.strip()),
-        autocurry(filter)(lambda x: re_test(filter_str, x)))
-    rslt = vlans(rslt)
-    # rslt = rslt.splitlines()
-    # rslt = [x.strip() for x in rslt]
-    # rslt = [
-    #     x for x in rslt
-    #     if re_test(r'^(port trunk allow|port hybrid tagged)', x, re.I)
-    # ]
+        autocurry(filter)(lambda x: re_test(filter_str, x)))(rslt)
+    rslt = reduce(lambda acc, curr: acc | _to_vlans(curr), vlans, set())
     import pprint
     pprint.pprint(rslt)
 
@@ -301,3 +295,13 @@ def get_inf(ip, inf):
         return ('fail', None, ip)
     state = re_find(r'current state : (\w+\s?\w+)', rslt)
     return ('success', state, ip)
+
+
+def _to_vlans(item):
+    vlan_sgmt = re_all(r'(\d+) to (\d+)', item)
+    vlan_sgmt = map(lambda x: range(int(x[0]), int(x[1]) + 1), vlan_sgmt)
+    vlan1 = reduce(lambda acc, curr: acc | set(*curr), vlan_sgmt, set())
+    vlans = re_all(r'\d+', re.sub(r'\d+ to \d+', '', item))
+    vlans = map(lambda x: int(x), vlans)
+    vlans = reduce(lambda acc, curr: acc.add(curr), vlans, vlan1)
+    return vlans
