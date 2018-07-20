@@ -300,8 +300,7 @@ def get_inf(ip, inf):
 def _to_vlans(item):
     vlan_sgmt = re_all(r'(\d+) to (\d+)', item)
     vlan_sgmt = map(lambda x: range(int(x[0]), int(x[1]) + 1), vlan_sgmt)
-    vlan1 = reduce(lambda acc, curr: acc | set(curr), vlan_sgmt, set())
     vlans = re_all(r'\d+', re.sub(r'\d+ to \d+', '', item))
     vlans = map(lambda x: int(x), vlans)
-    vlans = merge(vlan1, vlans)
+    vlans = merge(set(), *vlan_sgmt, vlans)
     return vlans
