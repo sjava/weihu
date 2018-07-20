@@ -218,7 +218,7 @@ def get_vlans_of_port(ip, port):
         autocurry(filter)(lambda x: re_test(filter_str, x)),
         autocurry(map)(lambda x: _to_vlans(x)))(rslt)
     vlans = merge(set(), *vlans)
-    return (ip, eth_trunk, list(vlans))
+    return (ip, eth_trunk, vlans)
 
 
 def get_ports(ip):
