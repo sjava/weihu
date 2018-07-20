@@ -1,7 +1,7 @@
 {
     "_meta": {
         "hash": {
-            "sha256": "f2678b64c0af0f3bcf596076a90b0de0a9d24e34b7733049edcf6267e68127db"
+            "sha256": "830050860cb3a15dc9ba9ae81e07564cda6cf0feef9db0dd921d811834db0447"
         },
         "pipfile-spec": 6,
         "requires": {
@@ -9,8 +9,8 @@
         },
         "sources": [
             {
-                "name": "pypi",
-                "url": "https://pypi.org/simple",
+                "name": "aliyun",
+                "url": "https://mirrors.aliyun.com/pypi/simple",
                 "verify_ssl": true
             }
         ]
@@ -34,7 +34,7 @@
             "hashes": [
                 "sha256:56cd64ce8d73d46a39b6166a750b0d1452657acf96adb51702aa5fd041b20f93"
             ],
-            "index": "pypi",
+            "index": "aliyun",
             "version": "==0.2.5"
         },
         "funcy": {
@@ -42,7 +42,7 @@
                 "sha256:1d973a2010dc9c7506743f2944ec8b76254111f28b199498705ff298ff3180f3",
                 "sha256:544412beb2bc1d7d370f54d5ca86e6c27df4281a3a6c13cce72ea5ab46d254eb"
             ],
-            "index": "pypi",
+            "index": "aliyun",
             "version": "==1.10.3"
         },
         "ipython": {
@@ -50,7 +50,7 @@
                 "sha256:a0c96853549b246991046f32d19db7140f5b1a644cc31f0dc1edc86713b7676f",
                 "sha256:eca537aa61592aca2fef4adea12af8e42f5c335004dfa80c78caf80e8b525e5c"
             ],
-            "index": "pypi",
+            "index": "aliyun",
             "version": "==6.4.0"
         },
         "ipython-genutils": {
@@ -79,7 +79,7 @@
                 "sha256:2a8e88259839571d1251d278476f3eec5db26deb73a70be5ed5dc5435e418aba",
                 "sha256:3fbd41d4caf27fa4a377bfd16fef87271099463e6fa73e92a52f92dfee5d425b"
             ],
-            "index": "pypi",
+            "index": "aliyun",
             "version": "==4.6.0"
         },
         "pickleshare": {
@@ -151,7 +151,7 @@
                 "sha256:7253265f7abd8b313e3892944044a365e3f4ac3fcdcfb4298f55ee9ddf188ba0",
                 "sha256:c7841163e2b576d435799169b78703ad6ac1bbb0f199994fc05f700b2a90ea37"
             ],
-            "index": "pypi",
+            "index": "aliyun",
             "version": "==3.5.0"
         },
         "jedi": {
@@ -189,7 +189,7 @@
                 "sha256:816da300f620fb88ba97c7962062c8c178d6693b1db19c184660156b1af91bdc",
                 "sha256:a78b27a85c5dbe9d89376e7f3aa70a9d8fa15cb45ee5f73a3cc3963b9b528ac1"
             ],
-            "index": "pypi",
+            "index": "aliyun",
             "version": "==0.41"
         },
         "pycodestyle": {
@@ -232,7 +232,7 @@
                 "sha256:6567745f0b6656f9c33a73c56a393071c699e6284a70d793798ab6e3769d25ec",
                 "sha256:a98a6eacca64d2b920558f4a2f78150db9474de821227e60deaa29f186121c63"
             ],
-            "index": "pypi",
+            "index": "aliyun",
             "version": "==0.22.0"
         }
     }

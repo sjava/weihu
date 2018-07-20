@@ -6,7 +6,7 @@ import sys
 import os
 import re
 from operator import methodcaller
-from funcy import re_find, select, map, compose, partial, lmapcat, filter
+from funcy import re_find, select, map, compose, partial, lmapcat, filter, re_test
 from funcy import lmap, re_all, join_with, identity, count_by, rcompose, autocurry
 
 prompter = "]"
@@ -138,7 +138,10 @@ def get_vlans_of_port(ip, port):
         close(child)
     except Exception as e:
         raise e
-    rslt = rcompose(
+    print(rslt)
+    print(eth_trunk)
+    rslt1 = rcompose(
         methodcaller('split', '#'),
-        autocurry(filter)(f'{eth_trunk}'))(rslt)
-    return rslt
+        autocurry(filter)(
+            lambda x: re_test(eth_trunk.replace(' ', ''), x, re.I)))(rslt)
+    return rslt1
