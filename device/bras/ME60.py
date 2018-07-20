@@ -7,8 +7,22 @@ import sys
 from operator import methodcaller
 
 import pexpect
-from funcy import (autocurry, compose, count_by, filter, lmap, lmapcat, map,
-                   partial, rcompose, re_all, re_find, re_test, select)
+from funcy import (
+    autocurry,
+    compose,
+    count_by,
+    filter,
+    lmap,
+    lmapcat,
+    map,
+    mapcat,
+    partial,
+    rcompose,
+    re_all,
+    re_find,
+    re_test,
+    select,
+)
 
 prompter = "]"
 pager = "---- More ----"
@@ -141,5 +155,8 @@ def get_vlans_of_port(ip, port):
         raise e
     rslt = rcompose(
         methodcaller('split', '#'),
-        autocurry(filter)(lambda x: re_test(eth_trunk, x, re.I)))(rslt)
+        autocurry(filter)(lambda x: re_test(eth_trunk, x, re.I)),
+        autocurry(mapcat)(lambda x: x.split('\r\n')),
+        autocurry(filter)('user-vlan'),
+        autocurry(map)(lambda x: x.strip()))(rslt)
     return rslt
