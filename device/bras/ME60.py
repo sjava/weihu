@@ -126,3 +126,16 @@ def get_itv_online(ip):
     except (pexpect.EOF, pexpect.TIMEOUT):
         return ('fail', None, ip)
     return ('success', count + count1, ip)
+
+
+def get_vlans_of_port(ip, port):
+    try:
+        child = telnet(ip)
+        rslt = do_some(child, f'disp cu interface {port}')
+        eth_trunk = re_find(r'eth-trunk \d+', rslt)
+        close(child)
+    except Exception as e:
+        raise e
+    print(rslt)
+    print(eth_trunk)
+    return rslt
