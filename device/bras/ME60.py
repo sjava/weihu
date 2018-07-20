@@ -1,13 +1,14 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-import pexpect
 import configparser
-import sys
 import os
 import re
+import sys
 from operator import methodcaller
-from funcy import re_find, select, map, compose, partial, lmapcat, filter, re_test
-from funcy import lmap, re_all, join_with, identity, count_by, rcompose, autocurry
+
+import pexpect
+from funcy import (autocurry, compose, count_by, filter, lmap, lmapcat, map,
+                   partial, rcompose, re_all, re_find, re_test, select)
 
 prompter = "]"
 pager = "---- More ----"
