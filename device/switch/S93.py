@@ -218,7 +218,7 @@ def get_vlans_of_port(ip, port):
         autocurry(filter)(lambda x: re_test(filter_str, x)))(rslt)
     rslt = reduce(lambda acc, curr: acc | _to_vlans(curr), vlans, set())
     import pprint
-    pprint.pprint(rslt)
+    pprint.pprint(list(rslt))
 
 
 def get_ports(ip):
@@ -300,7 +300,7 @@ def get_inf(ip, inf):
 def _to_vlans(item):
     vlan_sgmt = re_all(r'(\d+) to (\d+)', item)
     vlan_sgmt = map(lambda x: range(int(x[0]), int(x[1]) + 1), vlan_sgmt)
-    vlan1 = reduce(lambda acc, curr: acc | set(*curr), vlan_sgmt, set())
+    vlan1 = reduce(lambda acc, curr: acc | set(curr), vlan_sgmt, set())
     vlans = re_all(r'\d+', re.sub(r'\d+ to \d+', '', item))
     vlans = map(lambda x: int(x), vlans)
     vlans = reduce(lambda acc, curr: acc.add(curr), vlans, vlan1)
