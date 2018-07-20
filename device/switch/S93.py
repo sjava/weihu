@@ -224,7 +224,7 @@ def get_vlans_of_port(ip, port):
     #     if re_test(r'^(port trunk allow|port hybrid tagged)', x, re.I)
     # ]
     import pprint
-    pprint.pprint(rslt)
+    pprint.pprint(list(rslt))
 
 
 def get_ports(ip):
