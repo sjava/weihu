@@ -1,13 +1,13 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-import pexpect
 import configparser
-import sys
 import os
 import re
+import sys
 from operator import methodcaller
-from funcy import re_find, select, map, compose, partial, lmapcat, filter, re_test
-from funcy import lmap, re_all, join_with, identity, count_by, rcompose, autocurry
+import pexpect
+from funcy import (autocurry, compose, count_by, filter, lmap, lmapcat, map,
+                   partial, rcompose, re_all, re_find, re_test, select)
 
 prompter = "]"
 pager = "---- More ----"
@@ -133,15 +133,12 @@ def get_vlans_of_port(ip, port):
     try:
         child = telnet(ip)
         rslt = do_some(child, f'disp cu interface {port}')
-        eth_trunk = re_find(r'eth-trunk \d+', rslt)
+        eth_trunk = re_find(r'eth-trunk \d+', rslt).replace(' ', '')
         rslt = do_some(child, 'disp cu interface filter user-vlan')
         close(child)
     except Exception as e:
         raise e
-    print(rslt)
-    print(eth_trunk)
-    rslt1 = rcompose(
+    rslt = rcompose(
         methodcaller('split', '#'),
-        autocurry(filter)(
-            lambda x: re_test(eth_trunk.replace(' ', ''), x, re.I)))(rslt)
-    return rslt1
+        autocurry(filter)(lambda x: re_test(eth_trunk, x, re.I)))(rslt)
+    return rslt
