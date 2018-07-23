@@ -16,6 +16,7 @@ from funcy import (
     lmapcat,
     map,
     mapcat,
+    merge,
     partial,
     rcompose,
     re_all,
@@ -158,5 +159,14 @@ def get_vlans_of_port(ip, port):
         autocurry(filter)(lambda x: re_test(eth_trunk, x, re.I)),
         autocurry(mapcat)(lambda x: x.split('\r\n')),
         autocurry(filter)('user-vlan'),
-        autocurry(map)(lambda x: x.strip()))(rslt)
-    return rslt
+        autocurry(map)(lambda x: x.strip()),
+        autocurry(map)(lambda x: _item_to_vlans(x)))(rslt)
+    return merge(set(), *rslt)
+
+
+def _item_to_vlans(item):
+    if re_test(r'qinq \d+ \d+', item, re.I):
+        start, end = re_find(r'qinq (\d+) (\d+)', item, re.I)
+        return range(int(start), int(end) + 1)
+    vlan = item.split()[-1]
+    return [int(vlan)]
