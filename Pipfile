@@ -8,6 +8,9 @@ pexpect = "*"
 funcy = "*"
 ipython = "*"
 easysnmp = "*"
+multiprocess = "*"
+"py2neo" = "*"
+toolz = "*"
 
 [dev-packages]
 "flake8" = "*"
