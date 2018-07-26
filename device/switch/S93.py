@@ -205,8 +205,11 @@ def get_vlans_a(ip):
 def get_vlans_of_port(ip, port):
     try:
         child = telnet(ip)
-        rslt = do_some(child, f'disp cu interface {port}')
+        rslt = do_some(child, f'disp cu interface giga {port}')
         eth_trunk = re_find(r'eth-trunk \d+', rslt, re.I)
+        if re_test(r'error', rslt, re.I):
+            rslt = do_some(child, f'disp cu interface xgiga {port}')
+            eth_trunk = re_find(r'eth-trunk \d+', rslt, re.I)
         rslt = do_some(child, f'disp cu interface {eth_trunk}')
         close(child)
     except (pexpect.EOF, pexpect.TIMEOUT):
@@ -219,6 +222,15 @@ def get_vlans_of_port(ip, port):
         autocurry(map)(lambda x: _to_vlans(x)))(rslt)
     vlans = merge(set(), *vlans)
     return (ip, eth_trunk, vlans)
+
+
+def _to_vlans(item):
+    vlan_sgmt = re_all(r'(\d+) to (\d+)', item)
+    vlan_sgmt = map(lambda x: range(int(x[0]), int(x[1]) + 1), vlan_sgmt)
+    vlans = re_all(r'\d+', re.sub(r'\d+ to \d+', '', item))
+    vlans = map(lambda x: int(x), vlans)
+    vlans = merge(set(), *vlan_sgmt, vlans)
+    return vlans
 
 
 def get_ports(ip):
@@ -295,12 +307,3 @@ def get_inf(ip, inf):
         return ('fail', None, ip)
     state = re_find(r'current state : (\w+\s?\w+)', rslt)
     return ('success', state, ip)
-
-
-def _to_vlans(item):
-    vlan_sgmt = re_all(r'(\d+) to (\d+)', item)
-    vlan_sgmt = map(lambda x: range(int(x[0]), int(x[1]) + 1), vlan_sgmt)
-    vlans = re_all(r'\d+', re.sub(r'\d+ to \d+', '', item))
-    vlans = map(lambda x: int(x), vlans)
-    vlans = merge(set(), *vlan_sgmt, vlans)
-    return vlans

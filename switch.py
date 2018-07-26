@@ -7,8 +7,8 @@ import pexpect
 import configparser
 import easysnmp
 from multiprocess import Pool, Manager
-from py2neo import Graph, Node, authenticate
-from funcy import lmap, compose, partial, re_find, select
+# from py2neo import Graph, Node, authenticate
+from funcy import lmap, compose, partial, re_find, select, re_test
 from device.switch import S85, S93, T64, S89, S8905E
 
 config = configparser.ConfigParser()
@@ -17,8 +17,8 @@ community = config.get('switch', 'community')
 neo4j_username = config.get('neo4j', 'username')
 neo4j_password = config.get('neo4j', 'password')
 
-authenticate('61.155.48.36:7474', neo4j_username, neo4j_password)
-graph = Graph("http://61.155.48.36:7474/db/data")
+# authenticate('61.155.48.36:7474', neo4j_username, neo4j_password)
+# graph = Graph("http://61.155.48.36:7474/db/data")
 
 processor = 128
 sw_file, log_file, result_file = ('sw.txt', 'result/sw_log.txt',
@@ -53,8 +53,8 @@ def update_model():
             session = easysnmp.Session(
                 hostname=x, community=community, version=1)
             rslt = session.get('1.3.6.1.2.1.1.1.0').value
-            model = re_find(
-                r'((?<=Quidway )S\d+|(?<=ZXR10 )\w+(?= Software))', rslt)
+            model = re_find(r'((?<=Quidway )S\d+|(?<=ZXR10 )\w+(?= Software))',
+                            rslt)
             #  model = re_find(r'(?:Quidway (S\d+)|ZXR10 (\w+) Software)', rslt)
             #  model = select(bool, model)[0]
             if model.startswith('8905'):
@@ -68,9 +68,11 @@ def update_model():
         if mark == 'success':
             graph.cypher.execute(
                 "match (s:Switch) where s.ip={ip} set s.model={model},s.hostname={hostname},s.snmpState='normal'",
-                ip=x, model=model, hostname=hostname)
+                ip=x,
+                model=model,
+                hostname=hostname)
         #  with open(log_file, 'a') as flog:
-            #  flog.write('{ip}:{mark}\n'.format(ip=x, mark=mark))
+        #  flog.write('{ip}:{mark}\n'.format(ip=x, mark=mark))
 
 
 def del_old_data():
@@ -107,7 +109,9 @@ def del_old_data():
 
 
 def _model(funcs, device):
-    def no_model(**kw): return ('fail', None, kw['ip'])
+    def no_model(**kw):
+        return ('fail', None, kw['ip'])
+
     model = device.pop('model')
     return funcs.get(model, no_model)(**device)
 
@@ -129,21 +133,24 @@ def _add_groups(lock, record):
             tx.process()
             tx.commit()
         #  with open(log_file, 'a') as flog:
-            #  flog.write('{ip}:{mark}\n'.format(ip=ip, mark=mark))
+        #  flog.write('{ip}:{mark}\n'.format(ip=ip, mark=mark))
 
 
 def add_groups():
-    funcs = {'S8508': S85.get_groups,
-             'S8505': S85.get_groups,
-             'T64G': T64.get_groups,
-             'S8905': S89.get_groups,
-             'S8905E': S8905E.get_groups,
-             'S9306': S93.get_groups,
-             'S9303': S93.get_groups}
+    funcs = {
+        'S8508': S85.get_groups,
+        'S8505': S85.get_groups,
+        'T64G': T64.get_groups,
+        'S8905': S89.get_groups,
+        'S8905E': S8905E.get_groups,
+        'S9306': S93.get_groups,
+        'S9303': S93.get_groups
+    }
     get_groups = partial(_model, funcs)
     #  clear_log()
     nodes = graph.cypher.execute(
-        "match(s:Switch) where s.snmpState='normal' return s.ip as ip,s.model as model")
+        "match(s:Switch) where s.snmpState='normal' return s.ip as ip,s.model as model"
+    )
     switchs = [dict(ip=x['ip'], model=x['model']) for x in nodes]
     pool = Pool(processor)
     lock = Manager().Lock()
@@ -173,21 +180,24 @@ def _add_infs(lock, record):
             tx.process()
             tx.commit()
         #  with open(log_file, 'a') as flog:
-            #  flog.write('{ip}:{mark}\n'.format(ip=ip, mark=mark))
+        #  flog.write('{ip}:{mark}\n'.format(ip=ip, mark=mark))
 
 
 def add_infs():
-    funcs = {'S8508': S85.get_infs,
-             'S8505': S85.get_infs,
-             'T64G': T64.get_infs,
-             'S8905': S89.get_infs,
-             'S8905E': S8905E.get_infs,
-             'S9306': S93.get_infs,
-             'S9303': S93.get_infs}
+    funcs = {
+        'S8508': S85.get_infs,
+        'S8505': S85.get_infs,
+        'T64G': T64.get_infs,
+        'S8905': S89.get_infs,
+        'S8905E': S8905E.get_infs,
+        'S9306': S93.get_infs,
+        'S9303': S93.get_infs
+    }
     get_infs = partial(_model, funcs)
     #  clear_log()
     nodes = graph.cypher.execute(
-        "match(s:Switch) where s.snmpState='normal' return s.ip as ip,s.model as model")
+        "match(s:Switch) where s.snmpState='normal' return s.ip as ip,s.model as model"
+    )
     switchs = [dict(ip=x['ip'], model=x['model']) for x in nodes]
     pool = Pool(processor)
     lock = Manager().Lock()
@@ -210,23 +220,27 @@ def _add_traffics(lock, record):
             tx.process()
             tx.commit()
         #  with open(log_file, 'a') as flog:
-            #  flog.write('{ip}:{mark}\n'.format(ip=ip, mark=mark))
+        #  flog.write('{ip}:{mark}\n'.format(ip=ip, mark=mark))
 
 
 def add_traffics():
-    funcs = {'S8508': S85.get_traffics,
-             'S8505': S85.get_traffics,
-             'T64G': T64.get_traffics,
-             'S8905': S89.get_traffics,
-             'S8905E': S8905E.get_traffics,
-             'S9306': S93.get_traffics,
-             'S9303': S93.get_traffics}
+    funcs = {
+        'S8508': S85.get_traffics,
+        'S8505': S85.get_traffics,
+        'T64G': T64.get_traffics,
+        'S8905': S89.get_traffics,
+        'S8905E': S8905E.get_traffics,
+        'S9306': S93.get_traffics,
+        'S9303': S93.get_traffics
+    }
     get_traffics = partial(_model, funcs)
     #  clear_log()
     nodes = graph.cypher.execute(
-        "match (s:Switch)--(i:Inf) where s.snmpState='normal' return s.ip as ip,collect(i.name) as infs,s.model as model")
-    switchs = [dict(ip=x['ip'], infs=x['infs'], model=x['model'])
-               for x in nodes]
+        "match (s:Switch)--(i:Inf) where s.snmpState='normal' return s.ip as ip,collect(i.name) as infs,s.model as model"
+    )
+    switchs = [
+        dict(ip=x['ip'], infs=x['infs'], model=x['model']) for x in nodes
+    ]
     pool = Pool(processor)
     lock = Manager().Lock()
     _ff = partial(_add_traffics, lock)
@@ -248,21 +262,24 @@ def _add_main_card(lock, record):
             tx.process()
             tx.commit()
         #  with open(log_file, 'a') as flog:
-            #  flog.write('{ip}:{mark}\n'.format(ip=ip, mark=mark))
+        #  flog.write('{ip}:{mark}\n'.format(ip=ip, mark=mark))
 
 
 def add_main_card():
-    funcs = {'S8508': S85.get_main_card,
-             'S8505': S85.get_main_card,
-             'T64G': T64.get_main_card,
-             'S8905': S89.get_main_card,
-             'S8905E': S8905E.get_main_card,
-             'S9306': S93.get_main_card,
-             'S9303': S93.get_main_card}
+    funcs = {
+        'S8508': S85.get_main_card,
+        'S8505': S85.get_main_card,
+        'T64G': T64.get_main_card,
+        'S8905': S89.get_main_card,
+        'S8905E': S8905E.get_main_card,
+        'S9306': S93.get_main_card,
+        'S9303': S93.get_main_card
+    }
     get_main_card = partial(_model, funcs)
     #  clear_log()
     nodes = graph.cypher.execute(
-        "match (s:Switch) where s.snmpState='normal' return s.ip as ip,s.model as model")
+        "match (s:Switch) where s.snmpState='normal' return s.ip as ip,s.model as model"
+    )
     switches = [dict(ip=x['ip'], model=x['model']) for x in nodes]
     pool = Pool(processor)
     lock = Manager().Lock()
@@ -285,21 +302,24 @@ def _add_power_info(lock, record):
             tx.process()
             tx.commit()
         #  with open(log_file, 'a') as flog:
-            #  flog.write('{ip}:{mark}\n'.format(ip=ip, mark=mark))
+        #  flog.write('{ip}:{mark}\n'.format(ip=ip, mark=mark))
 
 
 def add_power_info():
-    funcs = {'S8508': S85.get_power_info,
-             'S8505': S85.get_power_info,
-             'T64G': T64.get_power_info,
-             'S8905': S89.get_power_info,
-             'S8905E': S8905E.get_power_info,
-             'S9306': S93.get_power_info,
-             'S9303': S93.get_power_info}
+    funcs = {
+        'S8508': S85.get_power_info,
+        'S8505': S85.get_power_info,
+        'T64G': T64.get_power_info,
+        'S8905': S89.get_power_info,
+        'S8905E': S8905E.get_power_info,
+        'S9306': S93.get_power_info,
+        'S9303': S93.get_power_info
+    }
     get_power_info = partial(_model, funcs)
     #  clear_log()
     nodes = graph.cypher.execute(
-        "match (s:Switch) where s.snmpState='normal' return s.ip as ip,s.model as model")
+        "match (s:Switch) where s.snmpState='normal' return s.ip as ip,s.model as model"
+    )
     switches = [dict(ip=x['ip'], model=x['model']) for x in nodes]
     pool = Pool(processor)
     lock = Manager().Lock()
@@ -307,6 +327,19 @@ def add_power_info():
     list(pool.map(compose(_ff, get_power_info), switches))
     pool.close()
     pool.join()
+
+
+def get_vlans_of_port():
+    switch = dict(9306=S93, 9303=S93)
+    bras = dict(me60=ME60)
+    action = 'get_vlans_of_port'
+    reader = csv.reader(open('links.csv'))
+    next(reader)
+    for link in reader:
+        sw_vlans = getattr(switch.get(link[2]), action)(link[0], link[1])
+        bras_vlans = getattr(bras.get(link[5]), action)(link[3], link[4])
+        print(sw_vlans)
+        print(bras_vlans)
 
 
 def main():
